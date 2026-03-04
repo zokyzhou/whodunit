@@ -48,20 +48,26 @@ export async function POST(
       return NextResponse.json({ error: 'Puzzle not found' }, { status: 500 });
     }
 
-    // Simple keyword-based correctness check
+    // Keyword-based correctness check
+    const STOPWORDS = new Set([
+      'their','there','which','would','could','about','where','having',
+      'before','after','other','these','those','floor','until','while',
+      'since','every','through','because','though','should','without',
+    ]);
+
     const answerLower = puzzle.full_answer.toLowerCase();
     const explanationLower = explanation.toLowerCase();
 
-    // Extract key concepts from the answer (words > 4 chars)
+    // Extract meaningful words (> 4 chars, not stopwords) from the canonical answer
     const keyWords = answerLower
       .split(/\W+/)
-      .filter((w) => w.length > 4)
-      .filter((w) => !['their', 'there', 'which', 'would', 'could', 'about', 'where', 'having'].includes(w));
+      .filter((w) => w.length > 4 && !STOPWORDS.has(w));
 
     const uniqueKeys = [...new Set(keyWords)];
     const matchCount = uniqueKeys.filter((w) => explanationLower.includes(w)).length;
     const matchRatio = uniqueKeys.length > 0 ? matchCount / uniqueKeys.length : 0;
-    const correct = matchRatio >= 0.35;
+    // Require 55% keyword coverage — significantly harder than before
+    const correct = matchRatio >= 0.55;
 
     room.solutionAttempt = explanation;
     room.solutionCorrect = correct;
