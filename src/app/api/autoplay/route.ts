@@ -174,20 +174,21 @@ export async function POST() {
     );
   }
 
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  try {
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-  await connectDB();
+    await connectDB();
 
-  // 1. Register two ephemeral bot agents
-  const [pm, guesser] = await Promise.all([
-    Agent.create({ name: `bot-pm-${Date.now()}`, api_key: uuidv4(), claim_token: uuidv4() }),
-    Agent.create({ name: `bot-guesser-${Date.now()}`, api_key: uuidv4(), claim_token: uuidv4() }),
-  ]);
+    // 1. Register two ephemeral bot agents
+    const [pm, guesser] = await Promise.all([
+      Agent.create({ name: `bot-pm-${Date.now()}`, api_key: uuidv4(), claim_token: uuidv4() }),
+      Agent.create({ name: `bot-guesser-${Date.now()}`, api_key: uuidv4(), claim_token: uuidv4() }),
+    ]);
 
-  // 2. Generate original mystery (~3-5s)
-  const storyRaw = await chatJSON(
-    genAI,
-    `You are a creative writer specialising in lateral thinking puzzles.
+    // 2. Generate original mystery (~3-5s)
+    const storyRaw = await chatJSON(
+      genAI,
+      `You are a creative writer specialising in lateral thinking puzzles.
 
 Invent a COMPLETELY ORIGINAL mystery — do NOT adapt any well-known puzzle or classic riddle.
 
@@ -197,46 +198,53 @@ Requirements:
 - One hidden key fact (never mentioned in the scenario) that recontextualises everything
 - Consistent internal logic so EVERY yes/no question can be answered truthfully from full_answer
 
-Return ONLY a valid JSON object. Use \\n for paragraph breaks inside string values. No markdown fences:
+Return a JSON object with exactly these keys:
 {
   "title": "4–6 word intriguing title that does NOT reveal the twist",
-  "scenario": "Three full paragraphs (use \\n\\n between paragraphs). Written like a police report. Paragraph 1: the puzzling event with specific names/location/time. Paragraph 2: witness accounts and physical details — weave in red herrings naturally. Paragraph 3: what investigators found. NEVER state the hidden key fact.",
-  "full_answer": "4–6 sentences explaining exactly what happened and why. Resolve every element. Detailed enough that any yes/no question can be answered truthfully."
+  "scenario": "Three full paragraphs separated by blank lines. Written like a police report. Paragraph 1: the puzzling event with specific names/location/time. Paragraph 2: witness accounts and physical details with red herrings. Paragraph 3: what investigators found. NEVER state the hidden key fact.",
+  "full_answer": "4–6 sentences explaining exactly what happened and why, resolving every element."
 }`
-  );
+    );
 
-  let title: string, scenario: string, full_answer: string;
-  try {
-    ({ title, scenario, full_answer } = parseStory(storyRaw));
-  } catch (e) {
-    console.error('[autoplay] Failed to parse story:', e, '\nRaw:', storyRaw);
-    return NextResponse.json({ error: 'Failed to parse story from Gemini', raw: storyRaw }, { status: 500 });
+    let title: string, scenario: string, full_answer: string;
+    try {
+      ({ title, scenario, full_answer } = parseStory(storyRaw));
+    } catch (e) {
+      console.error('[autoplay] Failed to parse story:', e, '\nRaw:', storyRaw);
+      return NextResponse.json({ error: 'Failed to parse story from Gemini', raw: storyRaw }, { status: 500 });
+    }
+
+    if (!scenario.trim() || !full_answer.trim()) {
+      return NextResponse.json({ error: 'Gemini returned an incomplete story', raw: storyRaw }, { status: 500 });
+    }
+
+    // 3. Create room — visible as 'active' immediately
+    const room = await Room.create({
+      title,
+      scenario,
+      full_answer,
+      puzzleMaster: pm._id,
+      guesser: guesser._id,
+      status: 'active',
+    });
+
+    const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+
+    // 4. Play the game in the background
+    setTimeout(() => playGame(genAI, room._id.toString(), scenario, full_answer), 0);
+
+    // 5. Return immediately
+    return NextResponse.json({
+      room_id: room._id,
+      title,
+      status: 'started',
+      watch_url: `${appUrl}/rooms/${room._id}`,
+    });
+  } catch (err: any) {
+    console.error('[autoplay] Unexpected error:', err);
+    return NextResponse.json(
+      { error: err?.message ?? 'Internal server error' },
+      { status: 500 }
+    );
   }
-
-  if (!scenario.trim() || !full_answer.trim()) {
-    return NextResponse.json({ error: 'Gemini returned an incomplete story', raw: storyRaw }, { status: 500 });
-  }
-
-  // 3. Create room — visible as 'active' immediately
-  const room = await Room.create({
-    title,
-    scenario,
-    full_answer,
-    puzzleMaster: pm._id,
-    guesser: guesser._id,
-    status: 'active',
-  });
-
-  const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
-
-  // 4. Play the game in the background
-  setTimeout(() => playGame(genAI, room._id.toString(), scenario, full_answer), 0);
-
-  // 5. Return immediately
-  return NextResponse.json({
-    room_id: room._id,
-    title,
-    status: 'started',
-    watch_url: `${appUrl}/rooms/${room._id}`,
-  });
 }

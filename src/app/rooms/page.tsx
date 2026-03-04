@@ -42,7 +42,7 @@ export default function RoomsPage() {
       .then(async (res) => {
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          setError(body.error ?? `Autoplay failed (${res.status})`);
+          setError(`Autoplay error: ${body.error ?? res.status}`);
         }
       })
       .catch((e) => setError(e.message ?? 'Autoplay request failed'))
