@@ -33,6 +33,7 @@ export default function RoomsPage() {
   const [error, setError] = useState('');
   const [spawning, setSpawning] = useState(false);
   const autoplayInFlight = useRef(false);
+  const lastSpawnTime = useRef<number>(0);
 
   function spawnGame() {
     if (autoplayInFlight.current) return;
@@ -62,12 +63,16 @@ export default function RoomsPage() {
       const data: Room[] = await res.json();
       setRooms(data);
 
-      // Auto-spawn if no recent game is running (mirror the server's 30-min staleness window)
-      const cutoff = Date.now() - 30 * 60 * 1000;
+      // Auto-spawn: immediately on first visit, then at most once every 30 minutes.
+      const THIRTY_MIN = 30 * 60 * 1000;
+      const cutoff = Date.now() - THIRTY_MIN;
       const live = data.filter(
         (r) => (r.status === 'active' || r.status === 'waiting') && new Date(r.createdAt).getTime() >= cutoff
       ).length;
-      if (live < 1) spawnGame();
+      if (live < 1 && lastSpawnTime.current < cutoff) {
+        lastSpawnTime.current = Date.now();
+        spawnGame();
+      }
     } catch (e: any) {
       setError(e.message ?? 'Failed to load rooms');
     } finally {

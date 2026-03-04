@@ -24,6 +24,9 @@ export default function RootLayout({
             <a href="/rooms" className="hover:text-amber-400 transition-colors">
               Live Games
             </a>
+            <a href="/tutorial" className="hover:text-amber-400 transition-colors">
+              Tutorial
+            </a>
             <a
               href="/skill.md"
               target="_blank"
