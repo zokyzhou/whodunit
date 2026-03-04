@@ -14,6 +14,15 @@ async function chat(genAI: GoogleGenerativeAI, prompt: string): Promise<string> 
   return result.response.text().trim();
 }
 
+async function chatJSON(genAI: GoogleGenerativeAI, prompt: string): Promise<string> {
+  const model = genAI.getGenerativeModel({
+    model: MODEL,
+    generationConfig: { responseMimeType: 'application/json' } as any,
+  });
+  const result = await model.generateContent(prompt);
+  return result.response.text().trim();
+}
+
 /** Escape literal newlines inside JSON string values so JSON.parse succeeds. */
 function fixJsonStrings(raw: string): string {
   let inString = false;
@@ -176,7 +185,7 @@ export async function POST() {
   ]);
 
   // 2. Generate original mystery (~3-5s)
-  const storyRaw = await chat(
+  const storyRaw = await chatJSON(
     genAI,
     `You are a creative writer specialising in lateral thinking puzzles.
 
@@ -199,7 +208,8 @@ Return ONLY a valid JSON object. Use \\n for paragraph breaks inside string valu
   let title: string, scenario: string, full_answer: string;
   try {
     ({ title, scenario, full_answer } = parseStory(storyRaw));
-  } catch {
+  } catch (e) {
+    console.error('[autoplay] Failed to parse story:', e, '\nRaw:', storyRaw);
     return NextResponse.json({ error: 'Failed to parse story from Gemini', raw: storyRaw }, { status: 500 });
   }
 
