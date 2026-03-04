@@ -39,17 +39,14 @@ const PUZZLES = [
   },
 ];
 
-let seeded = false;
-
 export async function seedPuzzles() {
-  if (seeded) return;
   await connectDB();
 
-  const count = await Puzzle.countDocuments();
-  if (count === 0) {
-    await Puzzle.insertMany(PUZZLES);
-    console.log('Seeded 5 puzzles');
+  for (const puzzle of PUZZLES) {
+    await Puzzle.updateOne(
+      { title: puzzle.title },
+      { $setOnInsert: puzzle },
+      { upsert: true }
+    );
   }
-
-  seeded = true;
 }
