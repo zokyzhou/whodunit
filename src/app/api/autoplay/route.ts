@@ -42,20 +42,21 @@ export async function POST() {
     client,
     `You are a creative writer specialising in lateral thinking puzzles.
 
-Invent a COMPLETELY ORIGINAL mystery — do NOT adapt any well-known puzzle.
-The mystery must have:
-- A striking, unexplained event involving specific characters, setting, and time
-- 3–5 misleading details or red herrings embedded naturally in the scenario
-- One hidden key fact that is never stated but explains everything
-- Consistent internal logic so every yes/no question can be answered
+Invent a COMPLETELY ORIGINAL mystery — do NOT adapt any well-known puzzle or classic riddle.
 
-Return ONLY valid JSON (no markdown, no prose outside JSON):
+Requirements:
+- A striking, unexplained event with SPECIFIC named characters, a precise location, and an exact time
+- 3–5 red-herring details that seem significant but are false leads
+- One hidden key fact (never mentioned in the scenario) that recontextualises everything
+- Consistent internal logic so EVERY yes/no question can be answered truthfully from full_answer
+
+Return ONLY valid JSON with no markdown fences or extra text:
 {
-  "title": "short intriguing title (4–6 words)",
-  "scenario": "2–3 paragraph description written like a police report or news story. Hide the key fact completely.",
-  "full_answer": "complete, detailed explanation that resolves every element of the scenario"
+  "title": "4–6 word intriguing title that does NOT reveal the twist",
+  "scenario": "Three full paragraphs written like a police report or investigative news story. First paragraph: the puzzling event. Second paragraph: witness accounts and physical details (include red herrings). Third paragraph: what investigators found. NEVER state the hidden key fact.",
+  "full_answer": "Detailed explanation (4–6 sentences) of exactly what happened and why, resolving every element of the scenario. Must be detailed enough that any yes/no question about the story can be answered truthfully."
 }`,
-    1024
+    2048
   );
 
   let title: string, scenario: string, full_answer: string;
@@ -85,26 +86,29 @@ Return ONLY valid JSON (no markdown, no prose outside JSON):
   // 4. Play through questions
   const qaLog: string[] = [];
 
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 12; i++) {
     // Guesser asks a question
     const question = await chat(
       client,
-      `You are playing a lateral thinking mystery game as the Guesser.
+      `You are the Guesser in a lateral thinking mystery game.
 
 Mystery scenario:
 """
 ${scenario}
 """
 
-Questions asked so far:
+Questions and answers so far:
 ${qaLog.length ? qaLog.join('\n') : '(none yet)'}
 
-Your goal: discover the hidden explanation through yes/no questions.
-- Challenge your assumptions about the scenario
-- Explore unusual angles: physical traits, hidden disabilities, environmental conditions, unusual professions
-- Do NOT ask about the most obvious explanation
-- Ask ONE creative yes/no question. Reply with ONLY the question, ending with "?"`,
-      120
+Think laterally. The obvious explanation is almost always WRONG.
+- Challenge every assumption the scenario forces (gender, motive, sequence, cause, location)
+- Explore: hidden disabilities, unusual professions, mistaken identity, time tricks, objects with unexpected properties
+- Probe what is NOT mentioned — absent details are often clues
+- Each question should build on previous answers to narrow in on the truth
+- Do NOT repeat territory already covered
+
+Ask ONE creative yes/no question. Reply with ONLY the question, ending with "?"`,
+      150
     );
 
     room.questions.push({

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 
 interface Room {
@@ -31,18 +31,32 @@ export default function RoomsPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [spawning, setSpawning] = useState(false);
+  const autoplayInFlight = useRef(false);
+
+  function spawnGame() {
+    if (autoplayInFlight.current) return;
+    autoplayInFlight.current = true;
+    setSpawning(true);
+    fetch('/api/autoplay', { method: 'POST' }).finally(() => {
+      autoplayInFlight.current = false;
+      setSpawning(false);
+    });
+  }
 
   async function fetchRooms() {
     try {
-      // Fetch both waiting rooms (from auth'd endpoint) and all rooms via public workaround
-      // We'll hit the public-facing rooms page data
       const res = await fetch('/api/rooms/all');
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? `API error ${res.status}`);
       }
-      const data = await res.json();
+      const data: Room[] = await res.json();
       setRooms(data);
+
+      // Auto-spawn a new game if fewer than 2 are active or waiting
+      const live = data.filter((r) => r.status === 'active' || r.status === 'waiting').length;
+      if (live < 2) spawnGame();
     } catch (e: any) {
       setError(e.message ?? 'Failed to load rooms');
     } finally {
@@ -63,9 +77,21 @@ export default function RoomsPage() {
           <h1 className="text-3xl font-bold text-white">Live Games</h1>
           <p className="text-slate-400 mt-1 text-sm">Auto-refreshes every 3 seconds</p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-sm text-slate-400">Live</span>
+        <div className="flex items-center gap-3">
+          {spawning && (
+            <span className="text-xs text-amber-400 animate-pulse">Generating new game…</span>
+          )}
+          <button
+            onClick={spawnGame}
+            disabled={autoplayInFlight.current}
+            className="text-sm bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black font-semibold px-4 py-1.5 rounded-lg transition-colors"
+          >
+            + New Game
+          </button>
+          <span className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-sm text-slate-400">Live</span>
+          </span>
         </div>
       </div>
 
@@ -80,10 +106,8 @@ export default function RoomsPage() {
       ) : rooms.length === 0 ? (
         <div className="text-center py-20">
           <div className="text-4xl mb-4">🎲</div>
-          <p className="text-slate-400">No active games right now.</p>
-          <p className="text-slate-500 text-sm mt-2">
-            Agents can register and start a game via the API.
-          </p>
+          <p className="text-slate-400">No games yet — generating the first one…</p>
+          <p className="text-slate-500 text-sm mt-2 animate-pulse">This takes about 30–60 seconds.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -128,7 +152,7 @@ export default function RoomsPage() {
 
       <div className="mt-10 p-4 bg-slate-900/50 border border-slate-800 rounded-lg text-sm text-slate-500">
         <strong className="text-slate-400">Watching a game?</strong> Click any room to see the full Q&A transcript in real time.
-        Agents can join via <code className="text-amber-400/80">POST /api/rooms/:id/join</code>.
+        New AI games auto-start when fewer than 2 are live. Hit <strong className="text-slate-400">+ New Game</strong> to force one now.
       </div>
     </div>
   );
