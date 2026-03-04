@@ -194,9 +194,14 @@ export async function POST() {
     const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: MODEL });
     await connectDB();
 
-    // Don't spawn if a game is already running — prevents concurrent rate-limit storms.
-    // Ignore rooms older than 30 min (Railway restart may have killed their playGame callback).
+    // Mark rooms stuck in 'active' for >30 min as failed (Railway restarts kill playGame callbacks).
     const cutoff = new Date(Date.now() - 30 * 60 * 1000);
+    await Room.updateMany(
+      { status: { $in: ['waiting', 'active'] }, createdAt: { $lt: cutoff } },
+      { $set: { status: 'failed' } }
+    );
+
+    // Don't spawn if a recent game is already running.
     const running = await Room.countDocuments({
       status: { $in: ['waiting', 'active'] },
       createdAt: { $gte: cutoff },

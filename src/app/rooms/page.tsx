@@ -62,8 +62,11 @@ export default function RoomsPage() {
       const data: Room[] = await res.json();
       setRooms(data);
 
-      // Auto-spawn a new game if fewer than 2 are active or waiting
-      const live = data.filter((r) => r.status === 'active' || r.status === 'waiting').length;
+      // Auto-spawn if no recent game is running (mirror the server's 30-min staleness window)
+      const cutoff = Date.now() - 30 * 60 * 1000;
+      const live = data.filter(
+        (r) => (r.status === 'active' || r.status === 'waiting') && new Date(r.createdAt).getTime() >= cutoff
+      ).length;
       if (live < 1) spawnGame();
     } catch (e: any) {
       setError(e.message ?? 'Failed to load rooms');
