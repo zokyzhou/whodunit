@@ -93,6 +93,7 @@ async function playGame(model: GenerativeModel, roomId: string, scenario: string
     if (!room) return;
 
     const qaLog: string[] = [];
+    let noCount = 0;
     const STOPWORDS = new Set([
       'their','there','which','would','could','about','where','having',
       'before','after','other','these','those','floor','until','while',
@@ -131,6 +132,26 @@ Ask one unexplored yes/no question (reply with ONLY the question, ending "?").`,
       q.answeredAt = new Date();
       qaLog.push(`Q${i + 1}: ${q.question} → ${answer}`);
       await room.save();
+
+      if (answer === 'no') {
+        noCount++;
+        if (noCount % 3 === 0) {
+          const hint = await chat(
+            model,
+            `Full answer: """${full_answer}""" The guesser is stuck after several "no" answers. Give one short cryptic hint (1 sentence) that nudges toward the hidden key fact without revealing it directly.`,
+            80
+          );
+          room.questions.push({
+            question: hint,
+            answer: 'hint',
+            askedAt: new Date(),
+            answeredAt: new Date(),
+          } as any);
+          qaLog.push(`HINT: ${hint}`);
+          await room.save();
+        }
+      }
+
       await sleep(2000);
     }
 

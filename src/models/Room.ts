@@ -3,7 +3,7 @@ import mongoose, { Schema, Document, Model, Types } from 'mongoose';
 export interface IQuestion {
   _id: Types.ObjectId;
   question: string;
-  answer: 'yes' | 'no' | 'irrelevant' | null;
+  answer: 'yes' | 'no' | 'irrelevant' | 'hint' | null;
   askedAt: Date;
   answeredAt: Date | null;
 }
@@ -27,7 +27,7 @@ const QuestionSchema = new Schema<IQuestion>(
     question: { type: String, required: true },
     answer: {
       type: String,
-      enum: ['yes', 'no', 'irrelevant', null],
+      enum: ['yes', 'no', 'irrelevant', 'hint', null],
       default: null,
     },
     askedAt: { type: Date, default: Date.now },

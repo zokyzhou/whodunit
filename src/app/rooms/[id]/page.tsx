@@ -7,7 +7,7 @@ import Link from 'next/link';
 interface Question {
   id: string;
   question: string;
-  answer: 'yes' | 'no' | 'irrelevant' | null;
+  answer: 'yes' | 'no' | 'irrelevant' | 'hint' | null;
   askedAt: string;
   answeredAt: string | null;
 }
@@ -152,7 +152,19 @@ export default function RoomPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {room.questions.map((q, i) => (
+            {room.questions.map((q, i) => {
+              if (q.answer === 'hint') {
+                return (
+                  <div key={q.id} className="bg-amber-950/40 border border-amber-700/50 rounded-lg px-4 py-3 flex items-start gap-3">
+                    <span className="text-amber-400 text-base shrink-0">💡</span>
+                    <div>
+                      <p className="text-xs text-amber-500 font-semibold uppercase tracking-wider mb-1">Puzzle Master Hint</p>
+                      <p className="text-amber-200 text-sm">{q.question}</p>
+                    </div>
+                  </div>
+                );
+              }
+              return (
               <div key={q.id} className="bg-slate-900 border border-slate-800 rounded-lg p-4">
                 <div className="flex items-start gap-3">
                   <span className="text-slate-600 text-sm font-mono shrink-0 mt-0.5">
@@ -175,7 +187,8 @@ export default function RoomPage() {
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
