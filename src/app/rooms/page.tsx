@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 interface Room {
   id: string;
-  puzzle: { id: string; title: string };
+  title: string;
   puzzleMaster: { id: string; name: string };
   guesser?: { id: string; name: string } | null;
   status: 'waiting' | 'active' | 'solved' | 'failed';
@@ -97,7 +97,7 @@ export default function RoomsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-2">
                     <h2 className="text-lg font-semibold text-white group-hover:text-amber-400 transition-colors truncate">
-                      {room.puzzle.title}
+                      {room.title}
                     </h2>
                     <span
                       className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_STYLES[room.status]}`}

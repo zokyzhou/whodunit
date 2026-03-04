@@ -14,12 +14,9 @@ interface Question {
 
 interface Room {
   id: string;
-  puzzle: {
-    id: string;
-    title: string;
-    scenario: string;
-    full_answer?: string;
-  };
+  title: string;
+  scenario: string;
+  full_answer?: string;
   puzzleMaster: { id: string; name: string };
   guesser: { id: string; name: string } | null;
   status: 'waiting' | 'active' | 'solved' | 'failed';
@@ -40,6 +37,20 @@ const ANSWER_LABELS: Record<string, string> = {
   yes: '✓ Yes',
   no: '✗ No',
   irrelevant: '~ Irrelevant',
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  waiting: 'text-yellow-400',
+  active: 'text-blue-400',
+  solved: 'text-green-400',
+  failed: 'text-red-400',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  waiting: '⏳ Waiting for Guesser',
+  active: '🔵 Game in Progress',
+  solved: '✅ Solved!',
+  failed: '❌ Game Over',
 };
 
 export default function RoomPage() {
@@ -86,20 +97,6 @@ export default function RoomPage() {
     );
   }
 
-  const statusColors: Record<string, string> = {
-    waiting: 'text-yellow-400',
-    active: 'text-blue-400',
-    solved: 'text-green-400',
-    failed: 'text-red-400',
-  };
-
-  const statusLabels: Record<string, string> = {
-    waiting: '⏳ Waiting for Guesser',
-    active: '🔵 Game in Progress',
-    solved: '✅ Solved!',
-    failed: '❌ Game Over',
-  };
-
   return (
     <div className="max-w-3xl mx-auto px-6 py-10">
       <div className="mb-6">
@@ -111,9 +108,9 @@ export default function RoomPage() {
       {/* Room header */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-6">
         <div className="flex items-start justify-between gap-4 mb-4">
-          <h1 className="text-2xl font-bold text-white">🧩 {room.puzzle.title}</h1>
-          <span className={`text-sm font-semibold ${statusColors[room.status]}`}>
-            {statusLabels[room.status]}
+          <h1 className="text-2xl font-bold text-white">🧩 {room.title}</h1>
+          <span className={`text-sm font-semibold shrink-0 ${STATUS_COLORS[room.status]}`}>
+            {STATUS_LABELS[room.status]}
           </span>
         </div>
 
@@ -128,7 +125,7 @@ export default function RoomPage() {
           <p className="text-xs text-slate-500 uppercase tracking-wider mb-2 font-medium">
             Opening Scenario
           </p>
-          <p className="text-slate-200 leading-relaxed">{room.puzzle.scenario}</p>
+          <p className="text-slate-200 leading-relaxed whitespace-pre-line">{room.scenario}</p>
         </div>
       </div>
 
@@ -156,10 +153,7 @@ export default function RoomPage() {
         ) : (
           <div className="space-y-3">
             {room.questions.map((q, i) => (
-              <div
-                key={q.id}
-                className="bg-slate-900 border border-slate-800 rounded-lg p-4"
-              >
+              <div key={q.id} className="bg-slate-900 border border-slate-800 rounded-lg p-4">
                 <div className="flex items-start gap-3">
                   <span className="text-slate-600 text-sm font-mono shrink-0 mt-0.5">
                     {String(i + 1).padStart(2, '0')}
@@ -168,15 +162,11 @@ export default function RoomPage() {
                     <p className="text-slate-200 mb-2">{q.question}</p>
                     <div className="flex items-center gap-2">
                       {q.answer ? (
-                        <span
-                          className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${ANSWER_STYLES[q.answer]}`}
-                        >
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${ANSWER_STYLES[q.answer]}`}>
                           {ANSWER_LABELS[q.answer]}
                         </span>
                       ) : (
-                        <span className="text-xs text-slate-600 italic">
-                          Awaiting answer…
-                        </span>
+                        <span className="text-xs text-slate-600 italic">Awaiting answer…</span>
                       )}
                       <span className="text-xs text-slate-600">
                         {new Date(q.askedAt).toLocaleTimeString()}
@@ -192,13 +182,9 @@ export default function RoomPage() {
 
       {/* Result */}
       {(room.status === 'solved' || room.status === 'failed') && (
-        <div
-          className={`rounded-xl border p-6 mb-6 ${
-            room.status === 'solved'
-              ? 'bg-green-900/20 border-green-800'
-              : 'bg-red-900/20 border-red-800'
-          }`}
-        >
+        <div className={`rounded-xl border p-6 mb-6 ${
+          room.status === 'solved' ? 'bg-green-900/20 border-green-800' : 'bg-red-900/20 border-red-800'
+        }`}>
           <h3 className={`text-lg font-bold mb-3 ${room.status === 'solved' ? 'text-green-400' : 'text-red-400'}`}>
             {room.status === 'solved' ? '🎉 Mystery Solved!' : '❌ Game Over'}
           </h3>
@@ -210,18 +196,17 @@ export default function RoomPage() {
             </div>
           )}
 
-          {room.puzzle.full_answer && (
+          {room.full_answer && (
             <div>
               <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Full Answer</p>
-              <p className="text-slate-200 text-sm leading-relaxed">{room.puzzle.full_answer}</p>
+              <p className="text-slate-200 text-sm leading-relaxed">{room.full_answer}</p>
             </div>
           )}
         </div>
       )}
 
-      {/* Metadata footer */}
       <div className="text-xs text-slate-600 text-center">
-        Room ID: {room.id} · Created {new Date(room.createdAt).toLocaleString()} · Last updated {new Date(room.updatedAt).toLocaleString()}
+        Room ID: {room.id} · Created {new Date(room.createdAt).toLocaleString()} · Updated {new Date(room.updatedAt).toLocaleString()}
       </div>
     </div>
   );
