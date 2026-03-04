@@ -19,6 +19,37 @@ async function chat(client: Anthropic, prompt: string, maxTokens = 512): Promise
   return (msg.content[0] as any).text.trim();
 }
 
+/** Escape literal newlines/carriage returns inside JSON string values so JSON.parse succeeds. */
+function fixJsonStrings(raw: string): string {
+  let inString = false;
+  let escaped = false;
+  let out = '';
+  for (const ch of raw) {
+    if (escaped) { out += ch; escaped = false; continue; }
+    if (ch === '\\') { out += ch; escaped = true; continue; }
+    if (ch === '"') { inString = !inString; out += ch; continue; }
+    if (inString && ch === '\n') { out += '\\n'; continue; }
+    if (inString && ch === '\r') { out += '\\r'; continue; }
+    out += ch;
+  }
+  return out;
+}
+
+function parseStory(raw: string): { title: string; scenario: string; full_answer: string } {
+  const block = raw.match(/\{[\s\S]*\}/)?.[0] ?? raw;
+  let json: any;
+  try {
+    json = JSON.parse(block);
+  } catch {
+    json = JSON.parse(fixJsonStrings(block));
+  }
+  return {
+    title: (json.title ?? 'Untitled Mystery').trim(),
+    scenario: (json.scenario ?? '').trim(),
+    full_answer: (json.full_answer ?? '').trim(),
+  };
+}
+
 export async function POST() {
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
@@ -50,26 +81,23 @@ Requirements:
 - One hidden key fact (never mentioned in the scenario) that recontextualises everything
 - Consistent internal logic so EVERY yes/no question can be answered truthfully from full_answer
 
-Return ONLY valid JSON with no markdown fences or extra text:
+Return ONLY a valid JSON object. Use \\n for paragraph breaks inside string values. No markdown fences, no prose outside the JSON:
 {
   "title": "4–6 word intriguing title that does NOT reveal the twist",
-  "scenario": "Three full paragraphs written like a police report or investigative news story. First paragraph: the puzzling event. Second paragraph: witness accounts and physical details (include red herrings). Third paragraph: what investigators found. NEVER state the hidden key fact.",
-  "full_answer": "Detailed explanation (4–6 sentences) of exactly what happened and why, resolving every element of the scenario. Must be detailed enough that any yes/no question about the story can be answered truthfully."
+  "scenario": "Three full paragraphs (use \\n\\n between paragraphs). Written like a police report. Paragraph 1: the puzzling event with specific names/location/time. Paragraph 2: witness accounts and physical details — weave in red herrings naturally. Paragraph 3: what investigators found. NEVER state the hidden key fact.",
+  "full_answer": "4–6 sentences explaining exactly what happened and why. Resolve every element. Detailed enough that any yes/no question can be answered truthfully."
 }`,
     2048
   );
 
   let title: string, scenario: string, full_answer: string;
   try {
-    const json = JSON.parse(storyRaw.match(/\{[\s\S]*\}/)?.[0] ?? storyRaw);
-    title = json.title ?? 'Untitled Mystery';
-    scenario = json.scenario ?? '';
-    full_answer = json.full_answer ?? '';
+    ({ title, scenario, full_answer } = parseStory(storyRaw));
   } catch {
     return NextResponse.json({ error: 'Failed to parse story from Claude', raw: storyRaw }, { status: 500 });
   }
 
-  if (!scenario || !full_answer) {
+  if (!scenario.trim() || !full_answer.trim()) {
     return NextResponse.json({ error: 'Claude returned an incomplete story', raw: storyRaw }, { status: 500 });
   }
 
