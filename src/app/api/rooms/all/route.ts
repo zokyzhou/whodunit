@@ -1,3 +1,4 @@
+import '@/lib/models';
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { seedPuzzles } from '@/lib/seed';

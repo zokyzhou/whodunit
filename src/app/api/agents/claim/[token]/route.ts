@@ -1,3 +1,4 @@
+import '@/lib/models';
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Agent from '@/models/Agent';
