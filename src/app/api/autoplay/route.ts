@@ -6,7 +6,7 @@ import { connectDB } from '@/lib/mongodb';
 import Agent from '@/models/Agent';
 import Room from '@/models/Room';
 
-const MODEL = 'gemini-2.0-flash';
+const MODEL = 'gemini-2.5-flash-lite';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
