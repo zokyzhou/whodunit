@@ -1,29 +1,30 @@
 import '@/lib/models';
 import { NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 import { v4 as uuidv4 } from 'uuid';
 import { connectDB } from '@/lib/mongodb';
 import Agent from '@/models/Agent';
 import Room from '@/models/Room';
 
-const MODEL = 'claude-haiku-4-5-20251001';
+const MODEL = 'gemini-2.0-flash';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-async function chat(client: Anthropic, prompt: string, maxTokens = 1024): Promise<string> {
+async function chat(model: GenerativeModel, prompt: string, maxTokens = 1024): Promise<string> {
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
-      const msg = await client.messages.create({
-        model: MODEL,
-        max_tokens: maxTokens,
-        messages: [{ role: 'user', content: prompt }],
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: maxTokens },
       });
-      if (msg.stop_reason === 'max_tokens') {
+      const candidate = result.response.candidates?.[0];
+      if (candidate?.finishReason === 'MAX_TOKENS') {
         throw new Error(`Response truncated at ${maxTokens} tokens — increase maxTokens`);
       }
-      return (msg.content[0] as any).text.trim();
+      return result.response.text().trim();
     } catch (e: any) {
-      if (e?.status === 429 && attempt < 4) {
+      const is429 = e?.status === 429 || e?.message?.includes('429') || e?.message?.includes('RESOURCE_EXHAUSTED');
+      if (is429 && attempt < 4) {
         const delay = Math.pow(2, attempt) * 5000; // 5s, 10s, 20s, 40s
         console.warn(`[autoplay] Rate limited, waiting ${delay}ms before retry ${attempt + 1}/4...`);
         await sleep(delay);
@@ -85,7 +86,7 @@ function parseStory(raw: string): { title: string; scenario: string; full_answer
   };
 }
 
-async function playGame(client: Anthropic, roomId: string, scenario: string, full_answer: string) {
+async function playGame(model: GenerativeModel, roomId: string, scenario: string, full_answer: string) {
   try {
     await connectDB();
     const room = await Room.findById(roomId);
@@ -100,7 +101,7 @@ async function playGame(client: Anthropic, roomId: string, scenario: string, ful
 
     for (let i = 0; i < 8; i++) {
       const question = await chat(
-        client,
+        model,
         `Lateral thinking mystery guesser. Scenario: """${scenario}"""
 Q&A so far: ${qaLog.join(' | ') || 'none'}
 Ask one unexplored yes/no question (reply with ONLY the question, ending "?").`,
@@ -118,7 +119,7 @@ Ask one unexplored yes/no question (reply with ONLY the question, ending "?").`,
       const q = room.questions[room.questions.length - 1];
 
       const answerRaw = await chat(
-        client,
+        model,
         `Answer: """${full_answer}""" Q: ${q.question}\nReply yes, no, or irrelevant.`,
         10
       );
@@ -134,7 +135,7 @@ Ask one unexplored yes/no question (reply with ONLY the question, ending "?").`,
     }
 
     const solution = await chat(
-      client,
+      model,
       `Scenario: """${scenario}""" Q&A: ${qaLog.join(' | ')}\nState the hidden key fact that explains the mystery in 2-3 sentences. Use the same words from the clues above.`,
       150
     );
@@ -155,16 +156,16 @@ Ask one unexplored yes/no question (reply with ONLY the question, ending "?").`,
 }
 
 export async function POST() {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: 'ANTHROPIC_API_KEY is not set. Add it in Railway → Variables.' },
+      { error: 'GEMINI_API_KEY is not set. Add it in Railway → Variables.' },
       { status: 503 }
     );
   }
 
   try {
-    const client = new Anthropic({ apiKey });
+    const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: MODEL });
     await connectDB();
 
     // Don't spawn if a game is already running — prevents concurrent rate-limit storms
@@ -186,7 +187,7 @@ export async function POST() {
       let lastErr: unknown;
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          lastRaw = await chat(client, storyPrompt, 1024);
+          lastRaw = await chat(model, storyPrompt, 1024);
           const parsed = parseStory(lastRaw);
           if (!parsed.scenario.trim() || !parsed.full_answer.trim()) {
             throw new Error('Parsed story has empty scenario or full_answer');
@@ -226,7 +227,7 @@ export async function POST() {
 
     const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
 
-    setTimeout(() => playGame(client, room._id.toString(), scenario, full_answer), 0);
+    setTimeout(() => playGame(model, room._id.toString(), scenario, full_answer), 0);
 
     return NextResponse.json({
       room_id: room._id,
