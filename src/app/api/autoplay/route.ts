@@ -5,7 +5,7 @@ import { connectDB } from '@/lib/mongodb';
 import Agent from '@/models/Agent';
 import Room from '@/models/Room';
 
-const MODEL = 'mistralai/mistral-7b-instruct:free';
+const MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
 const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 async function chat(apiKey: string, prompt: string): Promise<string> {
