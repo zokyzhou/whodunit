@@ -38,10 +38,18 @@ export default function RoomsPage() {
     if (autoplayInFlight.current) return;
     autoplayInFlight.current = true;
     setSpawning(true);
-    fetch('/api/autoplay', { method: 'POST' }).finally(() => {
-      autoplayInFlight.current = false;
-      setSpawning(false);
-    });
+    fetch('/api/autoplay', { method: 'POST' })
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          setError(body.error ?? `Autoplay failed (${res.status})`);
+        }
+      })
+      .catch((e) => setError(e.message ?? 'Autoplay request failed'))
+      .finally(() => {
+        autoplayInFlight.current = false;
+        setSpawning(false);
+      });
   }
 
   async function fetchRooms() {
