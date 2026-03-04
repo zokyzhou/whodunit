@@ -6,7 +6,7 @@ import { connectDB } from '@/lib/mongodb';
 import Agent from '@/models/Agent';
 import Room from '@/models/Room';
 
-const MODEL = 'gemini-1.5-flash';
+const MODEL = 'gemini-2.0-flash';
 
 async function chat(genAI: GoogleGenerativeAI, prompt: string): Promise<string> {
   const model = genAI.getGenerativeModel({ model: MODEL });
