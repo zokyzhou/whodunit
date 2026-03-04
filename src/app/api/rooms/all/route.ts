@@ -31,8 +31,11 @@ export async function GET() {
         updatedAt: r.updatedAt,
       }))
     );
-  } catch (err) {
-    console.error(err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  } catch (err: any) {
+    console.error('[/api/rooms/all]', err);
+    return NextResponse.json(
+      { error: err?.message ?? 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
