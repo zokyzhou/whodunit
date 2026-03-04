@@ -1,42 +1,25 @@
 import '@/lib/models';
 import { NextResponse } from 'next/server';
+import Anthropic from '@anthropic-ai/sdk';
 import { v4 as uuidv4 } from 'uuid';
 import { connectDB } from '@/lib/mongodb';
 import Agent from '@/models/Agent';
 import Room from '@/models/Room';
 
-const MODEL = 'mistralai/mistral-small-3.1-24b-instruct:free';
-const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const MODEL = 'claude-haiku-4-5-20251001';
 
-async function chat(apiKey: string, prompt: string): Promise<string> {
-  const res = await fetch(OR_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
-    }),
+async function chat(client: Anthropic, prompt: string, maxTokens = 1024): Promise<string> {
+  const msg = await client.messages.create({
+    model: MODEL,
+    max_tokens: maxTokens,
+    messages: [{ role: 'user', content: prompt }],
   });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`OpenRouter ${res.status}: ${body}`);
-  }
-
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content?.trim() ?? '';
+  return (msg.content[0] as any).text.trim();
 }
 
 function parseStory(raw: string): { title: string; scenario: string; full_answer: string } {
-  // Strip markdown fences if present
   const cleaned = raw.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
-  // Extract JSON object
   const block = cleaned.match(/\{[\s\S]*\}/)?.[0] ?? cleaned;
-  // Escape literal newlines inside string values
   let inString = false, escaped = false, fixed = '';
   for (const ch of block) {
     if (escaped) { fixed += ch; escaped = false; continue; }
@@ -54,7 +37,7 @@ function parseStory(raw: string): { title: string; scenario: string; full_answer
   };
 }
 
-async function playGame(apiKey: string, roomId: string, scenario: string, full_answer: string) {
+async function playGame(client: Anthropic, roomId: string, scenario: string, full_answer: string) {
   try {
     await connectDB();
     const room = await Room.findById(roomId);
@@ -69,7 +52,7 @@ async function playGame(apiKey: string, roomId: string, scenario: string, full_a
 
     for (let i = 0; i < 12; i++) {
       const question = await chat(
-        apiKey,
+        client,
         `You are the Guesser in a lateral thinking mystery game.
 
 Mystery scenario:
@@ -86,7 +69,8 @@ Think laterally. The obvious explanation is almost always WRONG.
 - Probe what is NOT mentioned — absent details are often clues
 - Do NOT repeat territory already covered
 
-Ask ONE creative yes/no question. Reply with ONLY the question, ending with "?"`
+Ask ONE creative yes/no question. Reply with ONLY the question, ending with "?"`,
+        150
       );
 
       room.questions.push({
@@ -100,7 +84,7 @@ Ask ONE creative yes/no question. Reply with ONLY the question, ending with "?"`
       const q = room.questions[room.questions.length - 1];
 
       const answerRaw = await chat(
-        apiKey,
+        client,
         `You are the Puzzle Master in a lateral thinking mystery game.
 
 The full answer to the mystery is:
@@ -111,7 +95,8 @@ ${full_answer}
 The Guesser asks: "${q.question}"
 
 Answer truthfully based on the full answer above.
-Reply with EXACTLY one word: yes  OR  no  OR  irrelevant`
+Reply with EXACTLY one word: yes  OR  no  OR  irrelevant`,
+        10
       );
 
       const answer = (answerRaw.toLowerCase().match(/\b(yes|no|irrelevant)\b/)?.[1] ?? 'irrelevant') as
@@ -124,7 +109,7 @@ Reply with EXACTLY one word: yes  OR  no  OR  irrelevant`
     }
 
     const solution = await chat(
-      apiKey,
+      client,
       `You are the Guesser in a lateral thinking mystery game.
 
 Mystery scenario:
@@ -136,7 +121,8 @@ Questions and answers so far:
 ${qaLog.join('\n')}
 
 Based on everything above, write your FINAL explanation of exactly what happened.
-Be specific and account for every detail in the scenario. 2–4 sentences.`
+Be specific and account for every detail in the scenario. 2–4 sentences.`,
+      300
     );
 
     const keyWords = full_answer.toLowerCase().split(/\W+/).filter((w) => w.length > 4 && !STOPWORDS.has(w));
@@ -155,15 +141,16 @@ Be specific and account for every detail in the scenario. 2–4 sentences.`
 }
 
 export async function POST() {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: 'OPENROUTER_API_KEY is not set. Get a free key at openrouter.ai → Add it in Railway → Variables.' },
+      { error: 'ANTHROPIC_API_KEY is not set. Add it in Railway → Variables.' },
       { status: 503 }
     );
   }
 
   try {
+    const client = new Anthropic({ apiKey });
     await connectDB();
 
     const [pm, guesser] = await Promise.all([
@@ -172,7 +159,7 @@ export async function POST() {
     ]);
 
     const storyRaw = await chat(
-      apiKey,
+      client,
       `You are a creative writer specialising in lateral thinking puzzles.
 
 Invent a COMPLETELY ORIGINAL mystery — do NOT adapt any well-known puzzle or classic riddle.
@@ -188,7 +175,8 @@ Return ONLY a JSON object with exactly these three keys (no markdown, no extra t
   "title": "4–6 word intriguing title that does NOT reveal the twist",
   "scenario": "Three paragraphs like a police report. P1: the puzzling event with names/location/time. P2: witness accounts with red herrings. P3: what investigators found. NEVER state the hidden key fact.",
   "full_answer": "4–6 sentences explaining exactly what happened and why, resolving every element."
-}`
+}`,
+      2048
     );
 
     let title: string, scenario: string, full_answer: string;
@@ -214,7 +202,7 @@ Return ONLY a JSON object with exactly these three keys (no markdown, no extra t
 
     const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
 
-    setTimeout(() => playGame(apiKey, room._id.toString(), scenario, full_answer), 0);
+    setTimeout(() => playGame(client, room._id.toString(), scenario, full_answer), 0);
 
     return NextResponse.json({
       room_id: room._id,
