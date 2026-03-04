@@ -37,7 +37,10 @@ export default function RoomsPage() {
       // Fetch both waiting rooms (from auth'd endpoint) and all rooms via public workaround
       // We'll hit the public-facing rooms page data
       const res = await fetch('/api/rooms/all');
-      if (!res.ok) throw new Error('Failed to fetch rooms');
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `API error ${res.status}`);
+      }
       const data = await res.json();
       setRooms(data);
     } catch (e: any) {
