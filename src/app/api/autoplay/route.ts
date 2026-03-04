@@ -23,10 +23,15 @@ async function chat(model: GenerativeModel, prompt: string, maxTokens = 1024): P
       }
       return result.response.text().trim();
     } catch (e: any) {
-      const is429 = e?.status === 429 || e?.message?.includes('429') || e?.message?.includes('RESOURCE_EXHAUSTED');
-      if (is429 && attempt < 4) {
-        const delay = Math.pow(2, attempt) * 5000; // 5s, 10s, 20s, 40s
-        console.warn(`[autoplay] Rate limited, waiting ${delay}ms before retry ${attempt + 1}/4...`);
+      const status = e?.status ?? e?.httpStatus;
+      const msg: string = e?.message ?? '';
+      const isRetryable =
+        status === 429 || status === 500 || status === 502 || status === 503 ||
+        msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') ||
+        msg.includes('502') || msg.includes('503') || msg.includes('overloaded');
+      if (isRetryable && attempt < 4) {
+        const delay = Math.pow(2, attempt) * 3000; // 3s, 6s, 12s, 24s
+        console.warn(`[autoplay] Transient error (${status ?? msg.slice(0, 40)}), retrying in ${delay}ms...`);
         await sleep(delay);
         continue;
       }
