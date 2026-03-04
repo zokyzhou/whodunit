@@ -64,7 +64,7 @@ export default function RoomsPage() {
 
       // Auto-spawn a new game if fewer than 2 are active or waiting
       const live = data.filter((r) => r.status === 'active' || r.status === 'waiting').length;
-      if (live < 2) spawnGame();
+      if (live < 1) spawnGame();
     } catch (e: any) {
       setError(e.message ?? 'Failed to load rooms');
     } finally {
