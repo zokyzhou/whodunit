@@ -135,14 +135,14 @@ Ask one unexplored yes/no question (reply with ONLY the question, ending "?").`,
 
     const solution = await chat(
       client,
-      `Scenario: """${scenario}""" Q&A: ${qaLog.join(' | ')}\nExplain in 2-3 sentences exactly what happened.`,
+      `Scenario: """${scenario}""" Q&A: ${qaLog.join(' | ')}\nState the hidden key fact that explains the mystery in 2-3 sentences. Use the same words from the clues above.`,
       150
     );
 
     const keyWords = full_answer.toLowerCase().split(/\W+/).filter((w) => w.length > 4 && !STOPWORDS.has(w));
     const uniqueKeys = [...new Set(keyWords)];
     const matchCount = uniqueKeys.filter((w) => solution.toLowerCase().includes(w)).length;
-    const correct = uniqueKeys.length > 0 && matchCount / uniqueKeys.length >= 0.55;
+    const correct = uniqueKeys.length > 0 && matchCount / uniqueKeys.length >= 0.30;
 
     room.solutionAttempt = solution;
     room.solutionCorrect = correct;
@@ -179,14 +179,14 @@ export async function POST() {
     ]);
 
     const storyPrompt = `Invent an original lateral thinking mystery (not a classic riddle). Return ONLY valid JSON, no markdown:
-{"title":"4-6 word title","scenario":"2 short paragraphs: (1) puzzling event with named characters, location, time; (2) red-herring witness details. Never reveal the hidden key fact.","full_answer":"3-4 sentences revealing the hidden truth that resolves everything."}`;
+{"title":"4-6 word title","scenario":"2 short paragraphs: (1) puzzling event with named characters, location, time; (2) red-herring witness details. Never reveal the hidden key fact.","full_answer":"3-4 sentences revealing the hidden truth. Use simple everyday words — avoid rare vocabulary, jargon, or proper nouns so a guesser can match the core idea with common phrasing."}`;
 
     async function generateStory(): Promise<{ title: string; scenario: string; full_answer: string; raw: string }> {
       let lastRaw = '';
       let lastErr: unknown;
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          lastRaw = await chat(client, storyPrompt, 4096);
+          lastRaw = await chat(client, storyPrompt, 1024);
           const parsed = parseStory(lastRaw);
           if (!parsed.scenario.trim() || !parsed.full_answer.trim()) {
             throw new Error('Parsed story has empty scenario or full_answer');
