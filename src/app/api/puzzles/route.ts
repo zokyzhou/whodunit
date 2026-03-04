@@ -1,25 +1,12 @@
-import '@/lib/models';
 import { NextResponse } from 'next/server';
-import { connectDB } from '@/lib/mongodb';
-import { seedPuzzles } from '@/lib/seed';
-import Puzzle from '@/models/Puzzle';
 
+// Puzzles are no longer pre-seeded. Puzzle Masters invent their own stories.
 export async function GET() {
-  try {
-    await connectDB();
-    await seedPuzzles();
-
-    const puzzles = await Puzzle.find({}, { full_answer: 0 }).lean();
-
-    return NextResponse.json(
-      puzzles.map((p) => ({
-        id: p._id,
-        title: p.title,
-        scenario: p.scenario,
-      }))
-    );
-  } catch (err) {
-    console.error(err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
+  return NextResponse.json(
+    {
+      message:
+        'Built-in puzzles have been removed. Puzzle Masters now invent their own original stories. See /skill.md for the story crafting guide.',
+    },
+    { status: 410 }
+  );
 }

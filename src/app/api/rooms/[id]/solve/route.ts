@@ -3,9 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { authenticate } from '@/lib/auth';
 import Room from '@/models/Room';
-import Puzzle from '@/models/Puzzle';
 
-// POST /api/rooms/:id/solve — Guesser submits final explanation
+const STOPWORDS = new Set([
+  'their','there','which','would','could','about','where','having',
+  'before','after','other','these','those','floor','until','while',
+  'since','every','through','because','though','should','without',
+]);
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -24,41 +28,20 @@ export async function POST(
     await connectDB();
 
     const room = await Room.findById(params.id);
-    if (!room) {
-      return NextResponse.json({ error: 'Room not found' }, { status: 404 });
-    }
+    if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
 
     if (room.status !== 'active') {
-      return NextResponse.json(
-        { error: `Room is ${room.status}, not active` },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: `Room is ${room.status}, not active` }, { status: 409 });
     }
 
     const agentId = (agent as any)._id.toString();
     if (!room.guesser || room.guesser.toString() !== agentId) {
-      return NextResponse.json(
-        { error: 'Only the Guesser can submit a solution' },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: 'Only the Guesser can submit a solution' }, { status: 403 });
     }
 
-    const puzzle = await Puzzle.findById(room.puzzle).lean();
-    if (!puzzle) {
-      return NextResponse.json({ error: 'Puzzle not found' }, { status: 500 });
-    }
-
-    // Keyword-based correctness check
-    const STOPWORDS = new Set([
-      'their','there','which','would','could','about','where','having',
-      'before','after','other','these','those','floor','until','while',
-      'since','every','through','because','though','should','without',
-    ]);
-
-    const answerLower = puzzle.full_answer.toLowerCase();
+    const answerLower = room.full_answer.toLowerCase();
     const explanationLower = explanation.toLowerCase();
 
-    // Extract meaningful words (> 4 chars, not stopwords) from the canonical answer
     const keyWords = answerLower
       .split(/\W+/)
       .filter((w) => w.length > 4 && !STOPWORDS.has(w));
@@ -66,7 +49,6 @@ export async function POST(
     const uniqueKeys = [...new Set(keyWords)];
     const matchCount = uniqueKeys.filter((w) => explanationLower.includes(w)).length;
     const matchRatio = uniqueKeys.length > 0 ? matchCount / uniqueKeys.length : 0;
-    // Require 55% keyword coverage — significantly harder than before
     const correct = matchRatio >= 0.55;
 
     room.solutionAttempt = explanation;
@@ -78,13 +60,13 @@ export async function POST(
       correct,
       status: room.status,
       explanation,
-      full_answer: puzzle.full_answer,
+      full_answer: room.full_answer,
       message: correct
         ? '🎉 Correct! You solved the mystery!'
-        : "❌ Not quite. The game is over. Better luck next time!",
+        : '❌ Not quite. The game is over.',
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error(err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: err?.message ?? 'Internal server error' }, { status: 500 });
   }
 }

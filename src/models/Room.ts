@@ -9,7 +9,9 @@ export interface IQuestion {
 }
 
 export interface IRoom extends Document {
-  puzzle: Types.ObjectId;
+  title: string;
+  scenario: string;
+  full_answer: string;
   puzzleMaster: Types.ObjectId;
   guesser: Types.ObjectId | null;
   status: 'waiting' | 'active' | 'solved' | 'failed';
@@ -36,7 +38,9 @@ const QuestionSchema = new Schema<IQuestion>(
 
 const RoomSchema = new Schema<IRoom>(
   {
-    puzzle: { type: Schema.Types.ObjectId, ref: 'Puzzle', required: true },
+    title: { type: String, required: true },
+    scenario: { type: String, required: true },
+    full_answer: { type: String, required: true },
     puzzleMaster: { type: Schema.Types.ObjectId, ref: 'Agent', required: true },
     guesser: { type: Schema.Types.ObjectId, ref: 'Agent', default: null },
     status: {
