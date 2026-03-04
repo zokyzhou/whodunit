@@ -105,13 +105,13 @@ async function playGame(model: GenerativeModel, roomId: string, scenario: string
       'since','every','through','because','though','should','without',
     ]);
 
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 12; i++) {
       const question = await chat(
         model,
-        `Lateral thinking mystery guesser. Scenario: """${scenario}"""
-Q&A so far: ${qaLog.join(' | ') || 'none'}
-Ask one unexplored yes/no question (reply with ONLY the question, ending "?").`,
-        60
+        `Lateral thinking mystery. Scenario: """${scenario}"""
+Q&A: ${qaLog.join(' | ') || 'none'}
+Find the ONE hidden fact that explains everything. Ask a sharp yes/no question — challenge assumptions about who the person really is, what the object actually is, or when/why the event happened. Reply with ONLY the question.`,
+        80
       );
 
       room.questions.push({
@@ -162,8 +162,8 @@ Ask one unexplored yes/no question (reply with ONLY the question, ending "?").`,
 
     const solution = await chat(
       model,
-      `Scenario: """${scenario}""" Q&A: ${qaLog.join(' | ')}\nState the hidden key fact that explains the mystery in 2-3 sentences. Use the same words from the clues above.`,
-      150
+      `Scenario: """${scenario}""" Q&A: ${qaLog.join(' | ')}\nBased on the clues, state the hidden key fact that explains the mystery in 3-4 sentences. Be specific — name what the person really is/does, or what the object/event actually was.`,
+      250
     );
 
     const keyWords = full_answer.toLowerCase().split(/\W+/).filter((w) => w.length > 4 && !STOPWORDS.has(w));
@@ -194,8 +194,13 @@ export async function POST() {
     const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: MODEL });
     await connectDB();
 
-    // Don't spawn if a game is already running — prevents concurrent rate-limit storms
-    const running = await Room.countDocuments({ status: { $in: ['waiting', 'active'] } });
+    // Don't spawn if a game is already running — prevents concurrent rate-limit storms.
+    // Ignore rooms older than 30 min (Railway restart may have killed their playGame callback).
+    const cutoff = new Date(Date.now() - 30 * 60 * 1000);
+    const running = await Room.countDocuments({
+      status: { $in: ['waiting', 'active'] },
+      createdAt: { $gte: cutoff },
+    });
     if (running > 0) {
       return NextResponse.json({ status: 'skipped', reason: 'game already running' });
     }
@@ -205,15 +210,16 @@ export async function POST() {
       Agent.create({ name: `bot-guesser-${Date.now()}`, api_key: uuidv4(), claim_token: uuidv4() }),
     ]);
 
-    const storyPrompt = `Invent an original lateral thinking mystery (not a classic riddle). Return ONLY valid JSON, no markdown:
-{"title":"4-6 word title","scenario":"2 short paragraphs: (1) puzzling event with named characters, location, time; (2) red-herring witness details. Never reveal the hidden key fact.","full_answer":"3-4 sentences revealing the hidden truth. Use simple everyday words — avoid rare vocabulary, jargon, or proper nouns so a guesser can match the core idea with common phrasing."}`;
+    const storyPrompt = `You are a lateral thinking puzzle master. Invent a completely original mystery with a satisfying twist. Return ONLY valid JSON, no markdown:
+{"title":"5-8 word intriguing title that hints without revealing","scenario":"2 vivid paragraphs: (1) a bizarre specific event with named characters, exact location and time — make it genuinely puzzling; (2) misleading witness accounts and red herrings that seem important but aren't. Never state the hidden key fact.","full_answer":"The surprising hidden truth in 3-5 sentences using plain everyday words. It must completely reframe the scenario and be discoverable through yes/no questions about common facts."}
+The hidden key fact must hinge on one of: a mistaken assumption about a person (job, disability, relationship), an object used unexpectedly, or a timeline misunderstanding. Keep it fair — all clues consistent with the truth.`;
 
     async function generateStory(): Promise<{ title: string; scenario: string; full_answer: string; raw: string }> {
       let lastRaw = '';
       let lastErr: unknown;
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          lastRaw = await chat(model, storyPrompt, 1024);
+          lastRaw = await chat(model, storyPrompt, 2048);
           const parsed = parseStory(lastRaw);
           if (!parsed.scenario.trim() || !parsed.full_answer.trim()) {
             throw new Error('Parsed story has empty scenario or full_answer');
