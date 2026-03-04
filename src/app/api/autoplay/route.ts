@@ -1,20 +1,17 @@
 import '@/lib/models';
 import { NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { v4 as uuidv4 } from 'uuid';
 import { connectDB } from '@/lib/mongodb';
 import Agent from '@/models/Agent';
 import Room from '@/models/Room';
 
-const MODEL = 'claude-haiku-4-5-20251001';
+const MODEL = 'gemini-1.5-flash';
 
-async function chat(client: Anthropic, prompt: string, maxTokens = 512): Promise<string> {
-  const msg = await client.messages.create({
-    model: MODEL,
-    max_tokens: maxTokens,
-    messages: [{ role: 'user', content: prompt }],
-  });
-  return (msg.content[0] as any).text.trim();
+async function chat(genAI: GoogleGenerativeAI, prompt: string): Promise<string> {
+  const model = genAI.getGenerativeModel({ model: MODEL });
+  const result = await model.generateContent(prompt);
+  return result.response.text().trim();
 }
 
 /** Escape literal newlines inside JSON string values so JSON.parse succeeds. */
@@ -50,7 +47,7 @@ function parseStory(raw: string): { title: string; scenario: string; full_answer
 
 /** Plays through Q&A and scores the game. Runs in the background after POST returns. */
 async function playGame(
-  client: Anthropic,
+  genAI: GoogleGenerativeAI,
   roomId: string,
   scenario: string,
   full_answer: string
@@ -69,7 +66,7 @@ async function playGame(
 
     for (let i = 0; i < 12; i++) {
       const question = await chat(
-        client,
+        genAI,
         `You are the Guesser in a lateral thinking mystery game.
 
 Mystery scenario:
@@ -87,8 +84,7 @@ Think laterally. The obvious explanation is almost always WRONG.
 - Each question should build on previous answers to narrow in on the truth
 - Do NOT repeat territory already covered
 
-Ask ONE creative yes/no question. Reply with ONLY the question, ending with "?"`,
-        150
+Ask ONE creative yes/no question. Reply with ONLY the question, ending with "?"`
       );
 
       room.questions.push({
@@ -102,7 +98,7 @@ Ask ONE creative yes/no question. Reply with ONLY the question, ending with "?"`
       const q = room.questions[room.questions.length - 1];
 
       const answerRaw = await chat(
-        client,
+        genAI,
         `You are the Puzzle Master in a lateral thinking mystery game.
 
 The full answer to the mystery is:
@@ -113,11 +109,10 @@ ${full_answer}
 The Guesser asks: "${q.question}"
 
 Answer truthfully based on the full answer above.
-Reply with EXACTLY one word: yes  OR  no  OR  irrelevant`,
-        10
+Reply with EXACTLY one word: yes  OR  no  OR  irrelevant`
       );
 
-      const answer = (answerRaw.toLowerCase().match(/^(yes|no|irrelevant)/)?.[1] ?? 'irrelevant') as
+      const answer = (answerRaw.toLowerCase().match(/\b(yes|no|irrelevant)\b/)?.[1] ?? 'irrelevant') as
         | 'yes'
         | 'no'
         | 'irrelevant';
@@ -130,7 +125,7 @@ Reply with EXACTLY one word: yes  OR  no  OR  irrelevant`,
 
     // Guesser submits final explanation
     const solution = await chat(
-      client,
+      genAI,
       `You are the Guesser in a lateral thinking mystery game.
 
 Mystery scenario:
@@ -142,8 +137,7 @@ Questions and answers so far:
 ${qaLog.join('\n')}
 
 Based on everything above, write your FINAL explanation of exactly what happened.
-Be specific and account for every detail in the scenario. 2–4 sentences.`,
-      300
+Be specific and account for every detail in the scenario. 2–4 sentences.`
     );
 
     const keyWords = full_answer.toLowerCase().split(/\W+/).filter((w) => w.length > 4 && !STOPWORDS.has(w));
@@ -157,7 +151,6 @@ Be specific and account for every detail in the scenario. 2–4 sentences.`,
     await room.save();
   } catch (err) {
     console.error('[autoplay/playGame]', err);
-    // Mark as failed so it doesn't stay stuck as 'active'
     try {
       await Room.findByIdAndUpdate(roomId, { status: 'failed' });
     } catch {}
@@ -165,14 +158,14 @@ Be specific and account for every detail in the scenario. 2–4 sentences.`,
 }
 
 export async function POST() {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.GEMINI_API_KEY) {
     return NextResponse.json(
-      { error: 'ANTHROPIC_API_KEY is not set. Add it in Railway → Variables.' },
+      { error: 'GEMINI_API_KEY is not set. Add it in Railway → Variables.' },
       { status: 503 }
     );
   }
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
   await connectDB();
 
@@ -182,9 +175,9 @@ export async function POST() {
     Agent.create({ name: `bot-guesser-${Date.now()}`, api_key: uuidv4(), claim_token: uuidv4() }),
   ]);
 
-  // 2. Generate original mystery (synchronous — ~3-5s)
+  // 2. Generate original mystery (~3-5s)
   const storyRaw = await chat(
-    client,
+    genAI,
     `You are a creative writer specialising in lateral thinking puzzles.
 
 Invent a COMPLETELY ORIGINAL mystery — do NOT adapt any well-known puzzle or classic riddle.
@@ -200,22 +193,21 @@ Return ONLY a valid JSON object. Use \\n for paragraph breaks inside string valu
   "title": "4–6 word intriguing title that does NOT reveal the twist",
   "scenario": "Three full paragraphs (use \\n\\n between paragraphs). Written like a police report. Paragraph 1: the puzzling event with specific names/location/time. Paragraph 2: witness accounts and physical details — weave in red herrings naturally. Paragraph 3: what investigators found. NEVER state the hidden key fact.",
   "full_answer": "4–6 sentences explaining exactly what happened and why. Resolve every element. Detailed enough that any yes/no question can be answered truthfully."
-}`,
-    2048
+}`
   );
 
   let title: string, scenario: string, full_answer: string;
   try {
     ({ title, scenario, full_answer } = parseStory(storyRaw));
   } catch {
-    return NextResponse.json({ error: 'Failed to parse story from Claude', raw: storyRaw }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to parse story from Gemini', raw: storyRaw }, { status: 500 });
   }
 
   if (!scenario.trim() || !full_answer.trim()) {
-    return NextResponse.json({ error: 'Claude returned an incomplete story', raw: storyRaw }, { status: 500 });
+    return NextResponse.json({ error: 'Gemini returned an incomplete story', raw: storyRaw }, { status: 500 });
   }
 
-  // 3. Create room immediately — visible as 'active' right away
+  // 3. Create room — visible as 'active' immediately
   const room = await Room.create({
     title,
     scenario,
@@ -227,10 +219,10 @@ Return ONLY a valid JSON object. Use \\n for paragraph breaks inside string valu
 
   const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
 
-  // 4. Play the game in the background — don't block the HTTP response
-  setTimeout(() => playGame(client, room._id.toString(), scenario, full_answer), 0);
+  // 4. Play the game in the background
+  setTimeout(() => playGame(genAI, room._id.toString(), scenario, full_answer), 0);
 
-  // 5. Return immediately so the browser doesn't time out
+  // 5. Return immediately
   return NextResponse.json({
     room_id: room._id,
     title,

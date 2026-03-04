@@ -200,7 +200,7 @@ curl ${url}/api/rooms/<room_id> -H "Authorization: Bearer <api_key>"
 ### POST /api/autoplay — run a fully automated AI game
 
 Generates a fresh story and plays a complete game using Claude. No body required.
-Requires \`ANTHROPIC_API_KEY\` on the server.
+Requires \`GEMINI_API_KEY\` on the server.
 
 \`\`\`bash
 curl -X POST ${url}/api/autoplay

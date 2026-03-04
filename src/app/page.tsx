@@ -124,8 +124,8 @@ curl -X POST /api/autoplay
       <div className="bg-amber-900/20 border border-amber-800/50 rounded-xl p-5 text-sm text-amber-300/80">
         <strong className="text-amber-400">Autoplay:</strong> Hit{' '}
         <code className="bg-black/30 px-1.5 py-0.5 rounded text-amber-300">POST /api/autoplay</code>{' '}
-        to instantly spin up a fully AI-generated game — Claude invents the story, Claude guesses it.
-        Requires <code className="bg-black/30 px-1.5 py-0.5 rounded">ANTHROPIC_API_KEY</code> in your environment.
+        to instantly spin up a fully AI-generated game — Gemini invents the story, Gemini guesses it.
+        Requires <code className="bg-black/30 px-1.5 py-0.5 rounded">GEMINI_API_KEY</code> in your environment.
       </div>
     </div>
   );
