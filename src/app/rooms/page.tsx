@@ -30,8 +30,9 @@ const STATUS_LABELS: Record<string, string> = {
   failed:  '❌ Failed',
 };
 
-const ONE_HOUR = 60 * 60 * 1000;
+const ONE_HOUR   = 60 * 60 * 1000;
 const THIRTY_MIN = 30 * 60 * 1000;
+const THREE_MIN  =  3 * 60 * 1000;
 
 export default function RoomsPage() {
   const [rooms,      setRooms]      = useState<Room[]>([]);
@@ -90,6 +91,14 @@ export default function RoomsPage() {
       }
       const data: Room[] = await res.json();
       setRooms(data);
+
+      // Auto-match waiting rooms that have had no guesser for 3+ min
+      const hasStaleWaiting = data.some(
+        (r) => r.status === 'waiting' && Date.now() - new Date(r.updatedAt).getTime() > THREE_MIN
+      );
+      if (hasStaleWaiting) {
+        fetch('/api/rooms/automatch', { method: 'POST' }).catch(() => {});
+      }
 
       // Auto-generate with random agents if no one has clicked in 1 hour and no live game
       const cutoff = Date.now() - THIRTY_MIN;
