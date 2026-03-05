@@ -27,44 +27,50 @@ interface Room {
   updatedAt: string;
 }
 
-const ANSWER_STYLES: Record<string, string> = {
-  yes: 'text-green-400 bg-green-900/30 border-green-800',
-  no: 'text-red-400 bg-red-900/30 border-red-800',
-  irrelevant: 'text-slate-400 bg-slate-800/50 border-slate-700',
+const ANSWER_BADGE: Record<string, string> = {
+  yes:        'bg-emerald-500/15 border border-emerald-500/40 text-emerald-400',
+  no:         'bg-red-500/15 border border-red-500/40 text-red-400',
+  irrelevant: 'bg-slate-800/60 border border-slate-700/60 text-slate-500',
 };
 
 const ANSWER_LABELS: Record<string, string> = {
-  yes: '✓ Yes',
-  no: '✗ No',
-  irrelevant: '~ Irrelevant',
+  yes:        '✓ YES',
+  no:         '✕ NO',
+  irrelevant: '○ IRREL.',
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  waiting: 'text-yellow-400',
-  active: 'text-blue-400',
-  solved: 'text-green-400',
-  failed: 'text-red-400',
+const STATUS_DOT: Record<string, string> = {
+  waiting: 'bg-cyan-400',
+  active:  'bg-emerald-400',
+  solved:  'bg-purple-400',
+  failed:  'bg-red-500',
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  waiting: '⏳ Waiting for Guesser',
-  active: '🔵 Game in Progress',
-  solved: '✅ Solved!',
-  failed: '❌ Game Over',
+const STATUS_LABEL: Record<string, string> = {
+  waiting: 'Awaiting Guesser',
+  active:  'In Progress',
+  solved:  'Case Solved',
+  failed:  'Case Closed',
+};
+
+const STATUS_COLOR: Record<string, string> = {
+  waiting: 'text-cyan-400',
+  active:  'text-emerald-400',
+  solved:  'text-purple-400',
+  failed:  'text-red-400',
 };
 
 export default function RoomPage() {
   const { id } = useParams<{ id: string }>();
-  const [room, setRoom] = useState<Room | null>(null);
+  const [room,    setRoom]    = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error,   setError]   = useState('');
 
   async function fetchRoom() {
     try {
       const res = await fetch(`/api/rooms/${id}/public`);
       if (!res.ok) throw new Error('Room not found');
-      const data = await res.json();
-      setRoom(data);
+      setRoom(await res.json());
     } catch (e: any) {
       setError(e.message ?? 'Failed to load room');
     } finally {
@@ -80,8 +86,11 @@ export default function RoomPage() {
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto px-6 py-20 text-center text-slate-500">
-        Loading…
+      <div className="max-w-3xl mx-auto px-6 py-20 text-center">
+        <div className="inline-flex items-center gap-3 text-slate-500">
+          <span className="w-2 h-2 rounded-full bg-cyan-500/60 animate-pulse" />
+          <span className="font-mono text-sm">Loading case file…</span>
+        </div>
       </div>
     );
   }
@@ -89,137 +98,158 @@ export default function RoomPage() {
   if (error || !room) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-20 text-center">
-        <p className="text-red-400">{error || 'Room not found'}</p>
-        <Link href="/rooms" className="text-amber-400 text-sm mt-4 inline-block">
-          ← Back to rooms
-        </Link>
+        <p className="text-red-400 font-mono text-sm mb-4">{error || 'Case not found'}</p>
+        <Link href="/rooms" className="text-cyan-400 hover:text-cyan-300 text-sm transition-colors">← Back to investigations</Link>
       </div>
     );
   }
 
+  const answeredCount = room.questions.filter(q => q.answer && q.answer !== 'hint').length;
+
   return (
     <div className="max-w-3xl mx-auto px-6 py-10">
+
+      {/* Back */}
       <div className="mb-6">
-        <Link href="/rooms" className="text-slate-500 hover:text-slate-300 text-sm transition-colors">
-          ← All rooms
+        <Link href="/rooms" className="text-slate-600 hover:text-slate-400 text-sm font-mono transition-colors">
+          ← all cases
         </Link>
       </div>
 
-      {/* Room header */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-6">
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <h1 className="text-2xl font-bold text-white">🧩 {room.title}</h1>
-          <span className={`text-sm font-semibold shrink-0 ${STATUS_COLORS[room.status]}`}>
-            {STATUS_LABELS[room.status]}
+      {/* ── Case header ─────────────────────────────────────── */}
+      <div className="glass rounded-2xl p-6 mb-5">
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <span className="text-xs font-mono text-slate-600 tracking-widest">
+            CASE #{room.id.slice(-8).toUpperCase()}
           </span>
+          <div className={`flex items-center gap-2 text-xs font-mono ${STATUS_COLOR[room.status]}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[room.status]} ${room.status === 'active' ? 'animate-pulse' : ''}`} />
+            {STATUS_LABEL[room.status].toUpperCase()}
+          </div>
         </div>
 
-        <div className="flex items-center gap-6 text-sm text-slate-500 mb-5">
-          <span>🎭 <span className="text-slate-300">{room.puzzleMaster.name}</span> (Puzzle Master)</span>
+        <h1 className="text-2xl md:text-3xl font-bold text-white mb-5 leading-tight">{room.title}</h1>
+
+        <div className="flex flex-wrap gap-4 pb-5 mb-5 border-b border-slate-800/60">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono text-purple-400/70 tracking-widest">PM</span>
+            <span className="text-sm text-slate-300 font-mono">{room.puzzleMaster.name}</span>
+          </div>
           {room.guesser && (
-            <span>🔍 <span className="text-slate-300">{room.guesser.name}</span> (Guesser)</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono text-cyan-400/70 tracking-widest">GS</span>
+              <span className="text-sm text-slate-300 font-mono">{room.guesser.name}</span>
+            </div>
           )}
         </div>
 
-        <div className="bg-black/40 rounded-lg p-4 border border-slate-800">
-          <p className="text-xs text-slate-500 uppercase tracking-wider mb-2 font-medium">
-            Opening Scenario
-          </p>
-          <p className="text-slate-200 leading-relaxed whitespace-pre-line">{room.scenario}</p>
+        <div>
+          <p className="text-xs font-mono text-slate-600 tracking-[0.2em] uppercase mb-3">◈ Case Brief</p>
+          <p className="text-slate-300 leading-relaxed whitespace-pre-line text-sm">{room.scenario}</p>
         </div>
       </div>
 
-      {/* Q&A Transcript */}
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          💬 Questions & Answers
-          <span className="text-sm font-normal text-slate-500">
-            ({room.questions.length} total)
-          </span>
+      {/* ── Interrogation log ───────────────────────────────── */}
+      <div className="mb-5">
+        <div className="flex items-center gap-3 mb-4">
+          <p className="text-xs font-mono text-slate-600 tracking-[0.2em] uppercase">◈ Interrogation Log</p>
+          <span className="text-xs font-mono text-slate-700">{answeredCount} answered</span>
           {room.status === 'active' && (
-            <span className="ml-auto flex items-center gap-1.5 text-xs text-slate-500">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-              Live
-            </span>
+            <div className="ml-auto flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs font-mono text-slate-600">live</span>
+            </div>
           )}
-        </h2>
+        </div>
 
         {room.questions.length === 0 ? (
-          <div className="text-center py-12 text-slate-600">
-            {room.status === 'waiting'
-              ? 'Waiting for a Guesser to join…'
-              : 'No questions asked yet.'}
+          <div className="text-center py-12 glass rounded-xl">
+            <p className="text-slate-600 font-mono text-sm">
+              {room.status === 'waiting' ? '⟳ Awaiting guesser connection…' : 'No questions filed yet.'}
+            </p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {room.questions.map((q, i) => {
               if (q.answer === 'hint') {
                 return (
-                  <div key={q.id} className="bg-amber-950/40 border border-amber-700/50 rounded-lg px-4 py-3 flex items-start gap-3">
-                    <span className="text-amber-400 text-base shrink-0">💡</span>
+                  <div key={q.id} className="bg-amber-950/30 border border-amber-700/30 rounded-xl px-4 py-3 flex items-start gap-3">
+                    <span className="text-amber-400 shrink-0 mt-0.5">💡</span>
                     <div>
-                      <p className="text-xs text-amber-500 font-semibold uppercase tracking-wider mb-1">Puzzle Master Hint</p>
-                      <p className="text-amber-200 text-sm">{q.question}</p>
+                      <p className="text-xs font-mono text-amber-600 tracking-widest uppercase mb-1">Puzzle Master Hint</p>
+                      <p className="text-amber-200/80 text-sm">{q.question}</p>
                     </div>
                   </div>
                 );
               }
               return (
-              <div key={q.id} className="bg-slate-900 border border-slate-800 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <span className="text-slate-600 text-sm font-mono shrink-0 mt-0.5">
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-slate-200 mb-2">{q.question}</p>
-                    <div className="flex items-center gap-2">
-                      {q.answer ? (
-                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${ANSWER_STYLES[q.answer]}`}>
-                          {ANSWER_LABELS[q.answer]}
+                <div key={q.id} className="glass rounded-xl px-4 py-3">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xs font-mono text-cyan-600/50 shrink-0 mt-0.5 w-7 text-right">
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-slate-200 text-sm mb-2 leading-relaxed">{q.question}</p>
+                      <div className="flex items-center gap-3">
+                        {q.answer ? (
+                          <span className={`text-xs font-mono font-semibold px-2.5 py-1 rounded-md ${ANSWER_BADGE[q.answer]}`}>
+                            {ANSWER_LABELS[q.answer]}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-mono text-slate-700 italic flex items-center gap-1.5">
+                            <span className="w-1 h-1 rounded-full bg-slate-700 animate-pulse" />
+                            awaiting response
+                          </span>
+                        )}
+                        <span className="text-xs font-mono text-slate-700 ml-auto">
+                          {new Date(q.askedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                         </span>
-                      ) : (
-                        <span className="text-xs text-slate-600 italic">Awaiting answer…</span>
-                      )}
-                      <span className="text-xs text-slate-600">
-                        {new Date(q.askedAt).toLocaleTimeString()}
-                      </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
               );
             })}
           </div>
         )}
       </div>
 
-      {/* Result */}
+      {/* ── Result ──────────────────────────────────────────── */}
       {(room.status === 'solved' || room.status === 'failed') && (
-        <div className={`rounded-xl border p-6 mb-6 ${
-          room.status === 'solved' ? 'bg-green-900/20 border-green-800' : 'bg-red-900/20 border-red-800'
+        <div className={`rounded-2xl border p-6 mb-6 ${
+          room.status === 'solved'
+            ? 'bg-purple-900/15 border-purple-500/30'
+            : 'bg-red-900/10 border-red-500/20'
         }`}>
-          <h3 className={`text-lg font-bold mb-3 ${room.status === 'solved' ? 'text-green-400' : 'text-red-400'}`}>
-            {room.status === 'solved' ? '🎉 Mystery Solved!' : '❌ Game Over'}
-          </h3>
+          <div className="flex items-center gap-3 mb-5">
+            <span className="text-xl">{room.status === 'solved' ? '🎯' : '📁'}</span>
+            <div>
+              <p className="text-xs font-mono tracking-widest uppercase text-slate-600 mb-0.5">Case Outcome</p>
+              <h3 className={`text-lg font-bold ${room.status === 'solved' ? 'text-purple-400' : 'text-red-400'}`}>
+                {room.status === 'solved' ? 'Mystery Solved' : 'Case Closed — Unsolved'}
+              </h3>
+            </div>
+          </div>
 
           {room.solutionAttempt && (
             <div className="mb-4">
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Guesser's Answer</p>
-              <p className="text-slate-200 text-sm">{room.solutionAttempt}</p>
+              <p className="text-xs font-mono text-slate-600 tracking-[0.2em] uppercase mb-2">Guesser's Theory</p>
+              <p className="text-slate-300 text-sm leading-relaxed glass rounded-xl p-4">{room.solutionAttempt}</p>
             </div>
           )}
 
           {room.full_answer && (
             <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Full Answer</p>
-              <p className="text-slate-200 text-sm leading-relaxed">{room.full_answer}</p>
+              <p className="text-xs font-mono text-slate-600 tracking-[0.2em] uppercase mb-2">Verified Truth</p>
+              <p className="text-slate-300 text-sm leading-relaxed glass rounded-xl p-4 border-l-2 border-l-purple-500/40">{room.full_answer}</p>
             </div>
           )}
         </div>
       )}
 
-      <div className="text-xs text-slate-600 text-center">
-        Room ID: {room.id} · Created {new Date(room.createdAt).toLocaleString()} · Updated {new Date(room.updatedAt).toLocaleString()}
+      <div className="text-xs font-mono text-slate-700 text-center space-y-1">
+        <p>Case ID: {room.id}</p>
+        <p>Opened {new Date(room.createdAt).toLocaleString()}</p>
       </div>
     </div>
   );

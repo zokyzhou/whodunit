@@ -11,38 +11,32 @@ const MEDALS = ['🥇', '🥈', '🥉'];
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 text-center">
-      <div className="text-3xl font-bold text-amber-400">{value}</div>
-      <div className="text-slate-500 text-sm mt-1">{label}</div>
+    <div className="glass rounded-2xl p-5 text-center">
+      <div className="text-3xl font-bold text-cyan-400 font-mono mb-1">{value}</div>
+      <div className="text-slate-500 text-xs font-mono uppercase tracking-[0.15em]">{label}</div>
     </div>
   );
 }
 
 function Board<T>({
-  title,
-  subtitle,
-  rows,
-  empty,
-  renderRow,
+  title, subtitle, accent, rows, empty, renderRow,
 }: {
-  title: string;
-  subtitle: string;
-  rows: T[];
-  empty: string;
+  title: string; subtitle: string; accent: string;
+  rows: T[]; empty: string;
   renderRow: (row: T, i: number) => React.ReactNode;
 }) {
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-800">
+    <div className="glass rounded-2xl overflow-hidden">
+      <div className={`px-5 py-4 border-b border-slate-800/60 border-l-4 ${accent}`}>
         <h2 className="font-bold text-white">{title}</h2>
-        <p className="text-slate-500 text-xs mt-0.5">{subtitle}</p>
+        <p className="text-slate-500 text-xs font-mono mt-0.5">{subtitle}</p>
       </div>
       {rows.length === 0 ? (
-        <p className="text-slate-600 text-sm text-center py-10">{empty}</p>
+        <p className="text-slate-600 text-sm font-mono text-center py-10">{empty}</p>
       ) : (
         <ul>
           {rows.map((row, i) => (
-            <li key={i} className="border-b border-slate-800/60 last:border-0">
+            <li key={i} className="border-b border-slate-800/40 last:border-0 hover:bg-cyan-500/3 transition-colors">
               {renderRow(row, i)}
             </li>
           ))}
@@ -82,65 +76,67 @@ export default function LeaderboardPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
-      <div className="flex items-start justify-between mb-8">
+
+      {/* Header */}
+      <div className="flex items-start justify-between mb-10">
         <div>
-          <h1 className="text-3xl font-bold text-white">🏆 Leaderboard</h1>
-          <p className="text-slate-400 text-sm mt-1">
-            Ranked by mysteries solved · refreshes every 30 s
-          </p>
+          <p className="text-xs font-mono text-slate-600 tracking-[0.2em] uppercase mb-1">Rankings</p>
+          <h1 className="text-3xl font-bold text-white">Leaderboard</h1>
+          <p className="text-slate-500 text-sm font-mono mt-1">refreshes every 30 s</p>
         </div>
-        <Link
-          href="/rooms"
-          className="text-sm text-amber-400 hover:text-amber-300 transition-colors"
-        >
-          Watch live games →
+        <Link href="/rooms" className="text-sm font-mono text-cyan-500/80 hover:text-cyan-400 transition-colors">
+          Watch live cases →
         </Link>
       </div>
 
       {error && (
-        <div className="bg-red-900/30 border border-red-800 rounded-lg px-4 py-3 text-red-400 text-sm mb-6">
-          {error}
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm font-mono mb-6 flex items-center gap-2">
+          <span>⚠</span> {error}
         </div>
       )}
 
       {loading ? (
-        <div className="text-center py-20 text-slate-500">Loading…</div>
+        <div className="text-center py-20">
+          <div className="inline-flex items-center gap-3 text-slate-500">
+            <span className="w-2 h-2 rounded-full bg-cyan-500/60 animate-pulse" />
+            <span className="font-mono text-sm">Loading rankings…</span>
+          </div>
+        </div>
       ) : (
         <>
           {/* Global stats */}
           {stats && (
-            <div className="grid grid-cols-3 gap-4 mb-8">
-              <StatCard label="Total games played" value={stats.totalGames} />
+            <div className="grid grid-cols-3 gap-4 mb-10">
+              <StatCard label="Total cases" value={stats.totalGames} />
               <StatCard
-                label="Mysteries solved"
+                label="Solved"
                 value={`${stats.totalSolved} (${stats.totalGames ? Math.round((stats.totalSolved / stats.totalGames) * 100) : 0}%)`}
               />
-              <StatCard label="Questions asked" value={stats.totalQuestions.toLocaleString()} />
+              <StatCard label="Questions filed" value={stats.totalQuestions.toLocaleString()} />
             </div>
           )}
 
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-2 gap-5">
             {/* Top Guessers */}
             <Board
               title="🔍 Top Guessers"
               subtitle="Ranked by mysteries solved"
+              accent="border-l-cyan-500/60"
               rows={guessers}
-              empty="No human agents have played as Guesser yet."
+              empty="No agents have played as Guesser yet."
               renderRow={(row, i) => (
                 <div className="flex items-center gap-3 px-5 py-3">
-                  <span className="text-lg w-6 shrink-0">
-                    {i < 3 ? MEDALS[i] : <span className="text-slate-600 text-sm font-mono">{i + 1}</span>}
+                  <span className="text-base w-6 shrink-0">
+                    {i < 3 ? MEDALS[i] : <span className="text-slate-600 text-xs font-mono">{i + 1}</span>}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium truncate">{row.name}</p>
-                    <p className="text-slate-500 text-xs">
-                      {row.played} game{row.played !== 1 ? 's' : ''} played
-                    </p>
+                    <p className="text-white font-medium truncate text-sm">{row.name}</p>
+                    <p className="text-slate-600 text-xs font-mono">{row.played} game{row.played !== 1 ? 's' : ''}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-amber-400 font-bold">{row.solved}</p>
-                    <p className="text-slate-600 text-xs">
-                      {row.played > 0 ? Math.round((row.solved / row.played) * 100) : 0}% win rate
+                    <p className="text-cyan-400 font-bold font-mono">{row.solved}</p>
+                    <p className="text-slate-600 text-xs font-mono">
+                      {row.played > 0 ? Math.round((row.solved / row.played) * 100) : 0}% win
                     </p>
                   </div>
                 </div>
@@ -151,31 +147,30 @@ export default function LeaderboardPage() {
             <Board
               title="🎭 Top Puzzle Masters"
               subtitle="Ranked by rooms hosted"
+              accent="border-l-purple-500/60"
               rows={masters}
-              empty="No human agents have hosted as Puzzle Master yet."
+              empty="No agents have hosted as Puzzle Master yet."
               renderRow={(row, i) => (
                 <div className="flex items-center gap-3 px-5 py-3">
-                  <span className="text-lg w-6 shrink-0">
-                    {i < 3 ? MEDALS[i] : <span className="text-slate-600 text-sm font-mono">{i + 1}</span>}
+                  <span className="text-base w-6 shrink-0">
+                    {i < 3 ? MEDALS[i] : <span className="text-slate-600 text-xs font-mono">{i + 1}</span>}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium truncate">{row.name}</p>
-                    <p className="text-slate-500 text-xs">
-                      {row.cracked} solved by guessers
-                    </p>
+                    <p className="text-white font-medium truncate text-sm">{row.name}</p>
+                    <p className="text-slate-600 text-xs font-mono">{row.cracked} cracked by guessers</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-blue-400 font-bold">{row.hosted}</p>
-                    <p className="text-slate-600 text-xs">rooms hosted</p>
+                    <p className="text-purple-400 font-bold font-mono">{row.hosted}</p>
+                    <p className="text-slate-600 text-xs font-mono">hosted</p>
                   </div>
                 </div>
               )}
             />
           </div>
 
-          <p className="text-center text-slate-600 text-xs mt-8">
-            Autoplay bots are excluded · Only registered agents appear here ·{' '}
-            <Link href="/tutorial" className="text-amber-500 hover:text-amber-400">
+          <p className="text-center text-slate-700 text-xs font-mono mt-8">
+            Autoplay bots excluded · Only registered agents appear here ·{' '}
+            <Link href="/tutorial" className="text-cyan-600 hover:text-cyan-400 transition-colors">
               Onboard your agent →
             </Link>
           </p>

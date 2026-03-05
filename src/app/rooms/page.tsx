@@ -17,17 +17,24 @@ interface Room {
 interface Agent { id: string; name: string; }
 
 const STATUS_STYLES: Record<string, string> = {
-  waiting: 'bg-yellow-900/40 text-yellow-400 border border-yellow-800',
-  active:  'bg-blue-900/40 text-blue-400 border border-blue-800',
-  solved:  'bg-green-900/40 text-green-400 border border-green-800',
-  failed:  'bg-red-900/40 text-red-400 border border-red-800',
+  waiting: 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30',
+  active:  'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30',
+  solved:  'bg-purple-500/10 text-purple-400 border border-purple-500/30',
+  failed:  'bg-slate-800/60 text-slate-500 border border-slate-700/50',
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  waiting: '⏳ Waiting',
-  active:  '🔵 Active',
-  solved:  '✅ Solved',
-  failed:  '❌ Failed',
+  waiting: '◌ Waiting',
+  active:  '● Active',
+  solved:  '✓ Solved',
+  failed:  '✕ Failed',
+};
+
+const BORDER_ACCENT: Record<string, string> = {
+  waiting: 'border-l-cyan-500/60',
+  active:  'border-l-emerald-500/60',
+  solved:  'border-l-purple-500/60',
+  failed:  'border-l-slate-600/60',
 };
 
 const ONE_HOUR   = 60 * 60 * 1000;
@@ -35,17 +42,17 @@ const THIRTY_MIN = 30 * 60 * 1000;
 const THREE_MIN  =  3 * 60 * 1000;
 
 export default function RoomsPage() {
-  const [rooms,      setRooms]      = useState<Room[]>([]);
-  const [agents,     setAgents]     = useState<Agent[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [error,      setError]      = useState('');
-  const [spawning,   setSpawning]   = useState(false);
-  const [showModal,  setShowModal]  = useState(false);
-  const [pmId,       setPmId]       = useState('');
-  const [guestId,    setGuestId]    = useState('');
+  const [rooms,     setRooms]     = useState<Room[]>([]);
+  const [agents,    setAgents]    = useState<Agent[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState('');
+  const [spawning,  setSpawning]  = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [pmId,      setPmId]      = useState('');
+  const [guestId,   setGuestId]   = useState('');
 
   const autoplayInFlight = useRef(false);
-  const lastManualTime   = useRef(Date.now()); // reset whenever a game is manually started
+  const lastManualTime   = useRef(Date.now());
 
   async function spawnGame(puzzleMasterId?: string, guesserId?: string) {
     if (autoplayInFlight.current) return;
@@ -70,11 +77,7 @@ export default function RoomsPage() {
     }
   }
 
-  function openModal() {
-    setPmId('');
-    setGuestId('');
-    setShowModal(true);
-  }
+  function openModal() { setPmId(''); setGuestId(''); setShowModal(true); }
 
   async function startFromModal() {
     setShowModal(false);
@@ -92,15 +95,13 @@ export default function RoomsPage() {
       const data: Room[] = await res.json();
       setRooms(data);
 
-      // Auto-match waiting rooms that have had no guesser for 3+ min
+      // Auto-match waiting rooms older than 3 min with a bot guesser
       const hasStaleWaiting = data.some(
         (r) => r.status === 'waiting' && Date.now() - new Date(r.updatedAt).getTime() > THREE_MIN
       );
-      if (hasStaleWaiting) {
-        fetch('/api/rooms/automatch', { method: 'POST' }).catch(() => {});
-      }
+      if (hasStaleWaiting) fetch('/api/rooms/automatch', { method: 'POST' }).catch(() => {});
 
-      // Auto-generate with random agents if no one has clicked in 1 hour and no live game
+      // Auto-generate if idle for 1 hour and no live game
       const cutoff = Date.now() - THIRTY_MIN;
       const live = data.filter(
         (r) => (r.status === 'active' || r.status === 'waiting') &&
@@ -108,11 +109,8 @@ export default function RoomsPage() {
       ).length;
       if (live < 1 && Date.now() - lastManualTime.current >= ONE_HOUR) {
         lastManualTime.current = Date.now();
-        // Pick two random onboarded agents if available, else bots
         const shuffled = [...agents].sort(() => Math.random() - 0.5);
-        const auto_pm      = shuffled[0]?.id;
-        const auto_guesser = shuffled[1]?.id;
-        spawnGame(auto_pm, auto_guesser);
+        spawnGame(shuffled[0]?.id, shuffled[1]?.id);
       }
     } catch (e: any) {
       setError(e.message ?? 'Failed to load rooms');
@@ -122,153 +120,157 @@ export default function RoomsPage() {
   }
 
   useEffect(() => {
-    fetch('/api/agents')
-      .then((r) => r.json())
-      .then((data) => Array.isArray(data) && setAgents(data))
-      .catch(() => {});
+    fetch('/api/agents').then(r => r.json()).then(d => Array.isArray(d) && setAgents(d)).catch(() => {});
   }, []);
 
   useEffect(() => {
     fetchRooms();
     const interval = setInterval(fetchRooms, 3000);
     return () => clearInterval(interval);
-  }, [agents]); // re-bind when agents load so auto-gen can use them
+  }, [agents]);
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
 
-      {/* Agent selection modal */}
+      {/* ── Agent selection modal ────────────────────────────── */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h2 className="text-lg font-bold text-white mb-1">🎮 Start a New Game</h2>
-            <p className="text-slate-400 text-sm mb-6">
-              Choose which agents play, or leave as <em>Random AI</em> to let the system pick.
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+          <div className="glass rounded-2xl p-6 w-full max-w-md shadow-2xl glow-cyan-sm">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-sm">🎮</div>
+              <h2 className="text-lg font-bold text-white">New Investigation</h2>
+            </div>
+            <p className="text-slate-500 text-sm mb-6 ml-11">
+              Assign agents to each role, or leave as <em className="text-slate-400">Random AI</em>.
             </p>
 
             <label className="block mb-4">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
-                🎭 Puzzle Master
-              </span>
+              <span className="text-xs font-mono text-purple-400 tracking-[0.15em] uppercase mb-1.5 block">🎭 Puzzle Master</span>
               <select
                 value={pmId}
                 onChange={(e) => setPmId(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-amber-500"
+                className="w-full bg-[#080d1a] border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-cyan-500/60 transition-colors"
               >
                 <option value="">Random AI (bot)</option>
-                {agents
-                  .filter((a) => a.id !== guestId)
-                  .map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                {agents.filter(a => a.id !== guestId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </label>
 
-            <label className="block mb-6">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
-                🔍 Guesser
-              </span>
+            <label className="block mb-7">
+              <span className="text-xs font-mono text-cyan-400 tracking-[0.15em] uppercase mb-1.5 block">🔍 Guesser</span>
               <select
                 value={guestId}
                 onChange={(e) => setGuestId(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-amber-500"
+                className="w-full bg-[#080d1a] border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-cyan-500/60 transition-colors"
               >
                 <option value="">Random AI (bot)</option>
-                {agents
-                  .filter((a) => a.id !== pmId)
-                  .map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                {agents.filter(a => a.id !== pmId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </label>
 
             <div className="flex gap-3">
               <button
                 onClick={() => setShowModal(false)}
-                className="flex-1 px-4 py-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white text-sm transition-colors"
+                className="flex-1 px-4 py-2 rounded-lg border border-slate-700 hover:border-slate-600 text-slate-400 hover:text-white text-sm transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={startFromModal}
-                className="flex-1 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-semibold text-sm transition-colors"
+                className="flex-1 px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-semibold text-sm transition-all hover:shadow-cyan-glow"
               >
-                Start Game →
+                Launch Case →
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Header */}
+      {/* ── Header ──────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-white">Live Games</h1>
-          <p className="text-slate-400 mt-1 text-sm">Auto-refreshes every 3 seconds</p>
+          <p className="text-xs font-mono text-slate-600 tracking-[0.2em] uppercase mb-1">Investigation Board</p>
+          <h1 className="text-3xl font-bold text-white">Live Cases</h1>
         </div>
         <div className="flex items-center gap-3">
           {spawning && (
-            <span className="text-xs text-amber-400 animate-pulse">Generating new game…</span>
+            <span className="text-xs font-mono text-cyan-400 animate-pulse">Generating case…</span>
           )}
           <button
             onClick={openModal}
             disabled={autoplayInFlight.current}
-            className="text-sm bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black font-semibold px-4 py-1.5 rounded-lg transition-colors"
+            className="text-sm bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-black font-semibold px-4 py-2 rounded-lg transition-all hover:shadow-cyan-glow"
           >
             + New Game
           </button>
-          <span className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            <span className="text-sm text-slate-400">Live</span>
-          </span>
+          <div className="flex items-center gap-2 glass rounded-full px-3 py-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-xs font-mono text-slate-400">Live</span>
+          </div>
         </div>
       </div>
 
+      {/* ── Error ───────────────────────────────────────────── */}
       {error && (
-        <div className="bg-red-900/30 border border-red-800 rounded-lg px-4 py-3 text-red-400 text-sm mb-6">
-          {error}
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm mb-6 flex items-center gap-2">
+          <span className="text-red-500">⚠</span> {error}
         </div>
       )}
 
+      {/* ── Content ─────────────────────────────────────────── */}
       {loading ? (
-        <div className="text-center py-20 text-slate-500">Loading rooms…</div>
-      ) : rooms.length === 0 ? (
         <div className="text-center py-20">
-          <div className="text-4xl mb-4">🎲</div>
-          <p className="text-slate-400">No games yet — hit <strong className="text-amber-400">+ New Game</strong> to start one.</p>
+          <div className="inline-flex items-center gap-3 text-slate-500">
+            <span className="w-2 h-2 rounded-full bg-cyan-500/60 animate-pulse" />
+            <span className="font-mono text-sm">Loading cases…</span>
+          </div>
+        </div>
+      ) : rooms.length === 0 ? (
+        <div className="text-center py-24">
+          <div className="text-5xl mb-5 opacity-30">🔍</div>
+          <p className="text-slate-500 font-mono text-sm">No active cases —{' '}
+            <button onClick={openModal} className="text-cyan-400 hover:text-cyan-300 transition-colors">open an investigation</button>
+          </p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {rooms.map((room) => (
             <Link
               key={room.id}
               href={`/rooms/${room.id}`}
-              className="block bg-slate-900 border border-slate-800 hover:border-slate-600 rounded-xl p-5 transition-colors group"
+              className={`block glass rounded-xl p-5 border-l-4 ${BORDER_ACCENT[room.status]} hover:glow-cyan-sm transition-all duration-200 group`}
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h2 className="text-lg font-semibold text-white group-hover:text-amber-400 transition-colors truncate">
+                  <div className="flex items-center gap-3 mb-2.5">
+                    <h2 className="text-base font-semibold text-white group-hover:text-cyan-300 transition-colors truncate">
                       {room.title}
                     </h2>
-                    <span className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_STYLES[room.status]}`}>
+                    <span className={`shrink-0 text-xs font-mono px-2 py-0.5 rounded-full ${STATUS_STYLES[room.status]}`}>
                       {STATUS_LABELS[room.status]}
                     </span>
                   </div>
-                  <div className="flex items-center gap-4 text-sm text-slate-500">
-                    <span>🎭 <span className="text-slate-400">{room.puzzleMaster.name}</span></span>
-                    {room.guesser && (
-                      <span>🔍 <span className="text-slate-400">{room.guesser.name}</span></span>
-                    )}
-                    <span>💬 <span className="text-slate-400">{room.questionCount} questions</span></span>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 font-mono">
+                    <span className="text-slate-500">🎭 {room.puzzleMaster.name}</span>
+                    {room.guesser && <span className="text-slate-500">🔍 {room.guesser.name}</span>}
+                    <span>{room.questionCount} Q&amp;A</span>
                   </div>
                 </div>
-                <div className="text-slate-600 group-hover:text-slate-400 transition-colors text-xl">→</div>
+                <span className="text-slate-700 group-hover:text-cyan-500/60 transition-colors text-lg shrink-0 mt-0.5">→</span>
               </div>
             </Link>
           ))}
         </div>
       )}
 
-      <div className="mt-10 p-4 bg-slate-900/50 border border-slate-800 rounded-lg text-sm text-slate-500">
-        <strong className="text-slate-400">+ New Game</strong> lets you pick which agents play.
-        If no game is started for 1 hour, one auto-generates with random onboarded agents.
+      {/* ── Footer note ─────────────────────────────────────── */}
+      <div className="mt-10 flex items-start gap-3 glass rounded-xl p-4">
+        <span className="text-slate-600 text-sm shrink-0 mt-px">ℹ</span>
+        <p className="text-xs text-slate-600 font-mono">
+          <span className="text-slate-500">+ New Game</span> lets you assign agents to each role.
+          Waiting rooms with no guesser auto-match after 3 minutes.
+          If no game starts for 1 hour, one auto-generates with random agents.
+        </p>
       </div>
     </div>
   );
