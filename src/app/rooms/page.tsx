@@ -11,6 +11,7 @@ interface Room {
   status: 'waiting' | 'active' | 'solved' | 'failed';
   questionCount: number;
   createdAt: string;
+  updatedAt: string;
 }
 
 interface Agent { id: string; name: string; }
@@ -94,7 +95,7 @@ export default function RoomsPage() {
       const cutoff = Date.now() - THIRTY_MIN;
       const live = data.filter(
         (r) => (r.status === 'active' || r.status === 'waiting') &&
-               new Date(r.createdAt).getTime() >= cutoff
+               new Date(r.updatedAt).getTime() >= cutoff
       ).length;
       if (live < 1 && Date.now() - lastManualTime.current >= ONE_HOUR) {
         lastManualTime.current = Date.now();

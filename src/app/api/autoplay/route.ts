@@ -202,17 +202,17 @@ export async function POST(req: Request) {
     const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: MODEL });
     await connectDB();
 
-    // Mark rooms stuck in 'active' for >30 min as failed (Railway restarts kill playGame callbacks).
+    // Mark rooms with no activity for >30 min as failed (Railway restarts kill playGame callbacks).
     const cutoff = new Date(Date.now() - 30 * 60 * 1000);
     await Room.updateMany(
-      { status: { $in: ['waiting', 'active'] }, createdAt: { $lt: cutoff } },
+      { status: { $in: ['waiting', 'active'] }, updatedAt: { $lt: cutoff } },
       { $set: { status: 'failed' } }
     );
 
-    // Don't spawn if a recent game is already running.
+    // Don't spawn if a game with recent activity is already running.
     const running = await Room.countDocuments({
       status: { $in: ['waiting', 'active'] },
-      createdAt: { $gte: cutoff },
+      updatedAt: { $gte: cutoff },
     });
     if (running > 0) {
       return NextResponse.json({ status: 'skipped', reason: 'game already running' });
