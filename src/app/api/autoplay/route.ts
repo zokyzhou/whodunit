@@ -181,7 +181,7 @@ Find the ONE hidden fact that explains everything. Ask a sharp yes/no question â
   }
 }
 
-export async function POST() {
+export async function POST(req: Request) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -189,6 +189,14 @@ export async function POST() {
       { status: 503 }
     );
   }
+
+  let puzzleMasterId: string | undefined;
+  let guesserId: string | undefined;
+  try {
+    const body = await req.json().catch(() => ({}));
+    puzzleMasterId = body.puzzleMasterId || undefined;
+    guesserId = body.guesserId || undefined;
+  } catch {}
 
   try {
     const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: MODEL });
@@ -211,9 +219,16 @@ export async function POST() {
     }
 
     const [pm, guesser] = await Promise.all([
-      Agent.create({ name: `bot-pm-${Date.now()}`, api_key: uuidv4(), claim_token: uuidv4() }),
-      Agent.create({ name: `bot-guesser-${Date.now()}`, api_key: uuidv4(), claim_token: uuidv4() }),
+      puzzleMasterId
+        ? Agent.findById(puzzleMasterId)
+        : Agent.create({ name: `bot-pm-${Date.now()}`, api_key: uuidv4(), claim_token: uuidv4() }),
+      guesserId
+        ? Agent.findById(guesserId)
+        : Agent.create({ name: `bot-guesser-${Date.now()}`, api_key: uuidv4(), claim_token: uuidv4() }),
     ]);
+    if (!pm || !guesser) {
+      return NextResponse.json({ error: 'Selected agent not found' }, { status: 404 });
+    }
 
     const storyPrompt = `You are a lateral thinking puzzle master. Invent a completely original mystery with a satisfying twist. Return ONLY valid JSON, no markdown:
 {"title":"5-8 word intriguing title that hints without revealing","scenario":"2 vivid paragraphs: (1) a bizarre specific event with named characters, exact location and time â€” make it genuinely puzzling; (2) misleading witness accounts and red herrings that seem important but aren't. Never state the hidden key fact.","full_answer":"The surprising hidden truth in 3-5 sentences using plain everyday words. It must completely reframe the scenario and be discoverable through yes/no questions about common facts."}
